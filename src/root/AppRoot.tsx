@@ -2,7 +2,7 @@ import { NavigationContainer, Theme as NavigationTheme } from "@react-navigation
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { FolderOpen, Map, Plus } from "lucide-react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { palette } from "../constants/theme";
 import { playSelectionHaptic } from "../lib/haptics";
 import { HomeTabParamList, RootStackParamList } from "../navigation/types";
@@ -94,11 +94,14 @@ function HomeTabs() {
           fontWeight: "700",
           marginTop: 2,
         },
+        tabBarItemStyle: {
+          flex: 1,
+        },
         tabBarStyle: {
           backgroundColor: palette.surface,
           borderTopColor: palette.line,
-          height: 78,
-          paddingTop: 8,
+          height: 84,
+          paddingTop: 10,
           paddingBottom: 12,
         },
         tabBarIcon: ({ color, size }) => {
@@ -148,23 +151,30 @@ function HomeTabs() {
 
 const styles = StyleSheet.create({
   captureTabWrap: {
+    flex: 1,
     alignItems: "center",
-    justifyContent: "flex-end",
-    marginTop: -20,
-    width: 88,
+    justifyContent: "flex-start",
+    marginTop: -26,
+    width: "100%",
   },
   captureTabButton: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 66,
+    height: 66,
+    borderRadius: 33,
     backgroundColor: palette.accent,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 6,
+    ...(Platform.OS === "web"
+      ? {
+          boxShadow: "0px 14px 22px rgba(28, 28, 30, 0.22)",
+        }
+      : {
+          shadowColor: "#1C1C1E",
+          shadowOffset: { width: 0, height: 14 },
+          shadowOpacity: 0.22,
+          shadowRadius: 20,
+          elevation: 8,
+        }),
   },
   captureTabButtonActive: {
     backgroundColor: palette.accentStrong,
@@ -173,7 +183,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.accentStrong,
   },
   captureTabLabel: {
-    marginTop: 6,
+    marginTop: 8,
     fontSize: 12,
     fontWeight: "700",
     color: palette.ink,

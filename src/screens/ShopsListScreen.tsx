@@ -4,10 +4,10 @@ import { CompositeNavigationProp, useNavigation } from "@react-navigation/native
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery } from "convex/react";
 import {
+  ArrowLeft,
   Coffee,
   FolderOpen,
   LocateFixed,
-  Plus,
   RefreshCcw,
   Search,
   ShoppingBasket,
@@ -73,7 +73,6 @@ export function ShopsListScreen() {
     activeMissionLabel,
     setActiveCategoryId,
     setActiveMissionId,
-    startCategoryMission,
   } = useMissionControl();
   const {
     flushQueue,
@@ -214,9 +213,13 @@ export function ShopsListScreen() {
     void playMissionAccomplishedHaptic();
   }
 
-  function openCaptureForCategory() {
-    if (!activeCategoryId) return;
-    startCategoryMission({ missionId: activeMissionId, categoryId: activeCategoryId });
+  function returnToFolderGrid() {
+    void playSelectionHaptic();
+    setActiveCategoryId(null);
+  }
+
+  function openCaptureScreen() {
+    void playSelectionHaptic();
     navigation.navigate("Capture");
   }
 
@@ -265,52 +268,98 @@ export function ShopsListScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.hero}>
-          <Text style={styles.eyebrow}>Strategic Mission Dashboard</Text>
-          <Text style={styles.heroTitle}>{activeMissionLabel}</Text>
-          <Text style={styles.heroSubtitle}>
-            {activeCategoryLabel ?? "Open a folder and start capturing territory."}
-          </Text>
-          <View style={styles.heroTag}>
-            <Target color={palette.accent} size={14} />
-            <Text style={styles.heroTagText}>{activeCategoryLabel ? "Category Active" : "Folder View"}</Text>
-          </View>
-          <View style={styles.missionRow}>
-            {missionCatalog.map((option) => (
-              <Pressable
-                key={option.id}
-                onPress={() => {
-                  void playSelectionHaptic();
-                  setActiveMissionId(option.id);
-                }}
-                style={({ pressed }) => [
-                  styles.missionChip,
-                  option.id === activeMissionId && styles.missionChipActive,
-                  pressed && option.id !== activeMissionId && styles.missionChipPressed,
-                ]}
-              >
-                <Text style={[styles.missionChipText, option.id === activeMissionId && styles.missionChipTextActive]}>
-                  {option.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          {activeCategoryLabel ? (
+            <>
+              <View style={styles.breadcrumbHeader}>
+                <Pressable
+                  accessibilityLabel="Back to missions"
+                  accessibilityRole="button"
+                  hitSlop={10}
+                  onPress={returnToFolderGrid}
+                  style={({ pressed }) => [
+                    styles.breadcrumbBackButton,
+                    pressed && styles.breadcrumbBackButtonPressed,
+                  ]}
+                >
+                  <ArrowLeft color={palette.white} size={18} />
+                </Pressable>
+                <View style={styles.breadcrumbCopy}>
+                  <Text style={styles.eyebrow}>Strategic Mission Dashboard</Text>
+                  <View style={styles.breadcrumbRow}>
+                    <Pressable
+                      accessibilityLabel="Go to mission folders"
+                      accessibilityRole="button"
+                      onPress={returnToFolderGrid}
+                    >
+                      <Text style={styles.breadcrumbLink}>Missions</Text>
+                    </Pressable>
+                    <Text style={styles.breadcrumbSlash}>/</Text>
+                    <Text numberOfLines={1} style={styles.breadcrumbCurrent}>
+                      {activeCategoryLabel}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              <Text style={styles.heroSubtitle}>
+                One-thumb folder view for {activeMissionLabel}. Dive in, act, and back out fast.
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.eyebrow}>Strategic Mission Dashboard</Text>
+              <Text style={styles.heroTitle}>{activeMissionLabel}</Text>
+              <Text style={styles.heroSubtitle}>
+                Open a folder and start capturing territory.
+              </Text>
+              <View style={styles.heroTag}>
+                <Target color={palette.accent} size={14} />
+                <Text style={styles.heroTagText}>Folder View</Text>
+              </View>
+              <View style={styles.missionRow}>
+                {missionCatalog.map((option) => (
+                  <Pressable
+                    key={option.id}
+                    onPress={() => {
+                      void playSelectionHaptic();
+                      setActiveMissionId(option.id);
+                    }}
+                    style={({ pressed }) => [
+                      styles.missionChip,
+                      option.id === activeMissionId && styles.missionChipActive,
+                      pressed && option.id !== activeMissionId && styles.missionChipPressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.missionChipText,
+                        option.id === activeMissionId && styles.missionChipTextActive,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
         </View>
 
         <View style={styles.syncBar}>
-          <View style={styles.syncCopy}>
-            <View style={styles.syncRow}>
-              {isOnline ? <Wifi color={palette.success} size={16} /> : <WifiOff color={palette.warning} size={16} />}
-              <Text style={styles.syncText}>{isOnline ? "Mission Sync Live" : "Offline queue active"}</Text>
-            </View>
-            <Text style={styles.syncSubtext}>
+          <View style={styles.syncRow}>
+            {isOnline ? <Wifi color={palette.success} size={16} /> : <WifiOff color={palette.warning} size={16} />}
+            <Text numberOfLines={1} style={styles.syncText}>
               {locationIssue
                 ? locationIssue
                 : currentLocation
-                  ? `Current area: ${getLocationLabel(currentLocation)}`
-                  : "Use Nearest To Me inside a folder to prioritize nearby leads."}
+                  ? `${isOnline ? "Mission Sync Live" : "Offline queue active"} • ${getLocationLabel(currentLocation)}`
+                  : isOnline
+                    ? "Mission Sync Live"
+                    : "Offline queue active"}
             </Text>
           </View>
-          <Text style={styles.syncMeta}>{pendingCount > 0 ? `${pendingCount} queued` : isFlushing ? "Syncing" : "Ready"}</Text>
+          <Text style={styles.syncMeta}>
+            {pendingCount > 0 ? `${pendingCount} queued` : isFlushing ? "Syncing" : "Ready"}
+          </Text>
         </View>
 
         {isLoading ? (
@@ -347,16 +396,7 @@ export function ShopsListScreen() {
         ) : (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Pressable
-                onPress={() => {
-                  void playSelectionHaptic();
-                  setActiveCategoryId(null);
-                }}
-                style={styles.backButton}
-              >
-                <FolderOpen color={palette.ink} size={16} />
-                <Text style={styles.backButtonText}>All Folders</Text>
-              </Pressable>
+              <Text style={styles.sectionTitle}>{activeCategoryLabel}</Text>
               <Text style={styles.sectionMeta}>{rows.length} leads</Text>
             </View>
             <View style={styles.searchRow}>
@@ -416,26 +456,24 @@ export function ShopsListScreen() {
               ItemSeparatorComponent={() => <View style={styles.separator} />}
               ListEmptyComponent={
                 <View style={styles.centerState}>
-                  <Text style={styles.emptyTitle}>No leads in this folder.</Text>
-                  <Text style={styles.centerText}>Change the area chip or deploy the FAB to add a new lead here.</Text>
+                  <Text style={styles.emptyTitle}>No leads yet.</Text>
+                  <Pressable
+                    accessibilityLabel={`Start mission in ${activeCategoryLabel}`}
+                    accessibilityRole="button"
+                    onPress={openCaptureScreen}
+                    style={({ pressed }) => [
+                      styles.startMissionButton,
+                      pressed && styles.startMissionButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.startMissionButtonText}>Start Mission</Text>
+                  </Pressable>
                 </View>
               }
             />
           </View>
         )}
       </ScrollView>
-
-      {activeCategoryId ? (
-        <Pressable
-          onPress={() => {
-            void playSelectionHaptic();
-            openCaptureForCategory();
-          }}
-          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-        >
-          <Plus color={palette.white} size={24} />
-        </Pressable>
-      ) : null}
 
       <MoveSheet activeMissionId={activeMissionId} onClose={() => setSelectedLead(null)} onMove={handleMoveLead} selectedLead={selectedLead} />
     </View>
@@ -457,15 +495,30 @@ function Segment({ active, label, onPress }: { active: boolean; label: string; o
 }
 
 function AreaChip({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+  const isPrimary = label === "All Areas";
+
   return (
     <Pressable
       onPress={() => {
         void playSelectionHaptic();
         onPress();
       }}
-      style={({ pressed }) => [styles.areaChip, active && styles.areaChipActive, pressed && !active && styles.areaChipPressed]}
+      style={({ pressed }) => [
+        styles.areaChip,
+        isPrimary && !active && styles.areaChipPrimary,
+        active && styles.areaChipActive,
+        pressed && !active && styles.areaChipPressed,
+      ]}
     >
-      <Text style={[styles.areaChipText, active && styles.areaChipTextActive]}>{label}</Text>
+      <Text
+        style={[
+          styles.areaChipText,
+          isPrimary && !active && styles.areaChipTextPrimary,
+          active && styles.areaChipTextActive,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -573,6 +626,23 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: typography.overline, fontWeight: "700", color: "#B4AC9F", letterSpacing: 1.2, textTransform: "uppercase" },
   heroTitle: { fontSize: 32, lineHeight: 36, fontWeight: "800", color: palette.white },
   heroSubtitle: { fontSize: typography.body, lineHeight: 22, color: "#E6DFD4" },
+  breadcrumbHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  breadcrumbBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#232529",
+  },
+  breadcrumbBackButtonPressed: {
+    backgroundColor: "#2E3137",
+  },
+  breadcrumbCopy: { flex: 1, gap: spacing.xs },
+  breadcrumbRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  breadcrumbLink: { fontSize: typography.title, fontWeight: "700", color: "#E6DFD4" },
+  breadcrumbSlash: { fontSize: typography.title, fontWeight: "700", color: "#817A70" },
+  breadcrumbCurrent: { flex: 1, fontSize: typography.title, fontWeight: "800", color: palette.white },
   heroTag: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: spacing.xs, borderRadius: radii.pill, backgroundColor: "#232529", paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   heroTagText: { fontSize: typography.overline, fontWeight: "700", color: palette.white, textTransform: "uppercase", letterSpacing: 0.8 },
   missionRow: { flexDirection: "row", gap: spacing.sm },
@@ -581,11 +651,9 @@ const styles = StyleSheet.create({
   missionChipPressed: { backgroundColor: "#232529" },
   missionChipText: { fontSize: typography.label, fontWeight: "700", color: "#D6CFBF" },
   missionChipTextActive: { color: palette.white },
-  syncBar: { marginHorizontal: spacing.lg, flexDirection: "row", justifyContent: "space-between", gap: spacing.sm, borderRadius: radii.md, backgroundColor: palette.backgroundMuted, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  syncCopy: { flex: 1, gap: 2 },
+  syncBar: { marginHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, borderRadius: radii.pill, backgroundColor: palette.backgroundMuted, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   syncRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  syncText: { fontSize: typography.label, fontWeight: "700", color: palette.ink },
-  syncSubtext: { fontSize: typography.overline, color: palette.mutedInk },
+  syncText: { flex: 1, fontSize: typography.label, fontWeight: "700", color: palette.ink },
   syncMeta: { fontSize: typography.overline, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
   section: { paddingHorizontal: spacing.lg, gap: spacing.md },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
@@ -597,8 +665,6 @@ const styles = StyleSheet.create({
   folderIcon: { width: 44, height: 44, borderRadius: radii.md, alignItems: "center", justifyContent: "center", backgroundColor: palette.accentSoft },
   folderName: { fontSize: typography.title, fontWeight: "800", color: palette.ink },
   folderCount: { fontSize: typography.label, color: palette.mutedInk },
-  backButton: { flexDirection: "row", alignItems: "center", gap: spacing.xs, borderRadius: radii.pill, backgroundColor: palette.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
-  backButtonText: { fontSize: typography.label, fontWeight: "700", color: palette.ink },
   searchRow: { flexDirection: "row", gap: spacing.sm },
   searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, minHeight: 52, paddingHorizontal: spacing.md },
   searchInput: { flex: 1, fontSize: typography.body, color: palette.ink },
@@ -613,17 +679,34 @@ const styles = StyleSheet.create({
   locateButton: { width: 44, height: 44, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, alignItems: "center", justifyContent: "center" },
   chipRow: { gap: spacing.sm, paddingRight: spacing.lg },
   areaChip: { borderRadius: radii.pill, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  areaChipPrimary: { borderColor: "#232529", backgroundColor: "#232529" },
   areaChipActive: { borderColor: palette.accent, backgroundColor: palette.accent },
   areaChipPressed: { backgroundColor: palette.backgroundMuted },
   areaChipText: { fontSize: typography.label, fontWeight: "700", color: palette.ink },
+  areaChipTextPrimary: { color: palette.white },
   areaChipTextActive: { color: palette.white },
   listContent: { paddingBottom: spacing.xxl },
   separator: { height: spacing.sm },
   centerState: { alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl },
   centerText: { textAlign: "center", fontSize: typography.label, lineHeight: 22, color: palette.mutedInk },
   emptyTitle: { textAlign: "center", fontSize: typography.title, fontWeight: "700", color: palette.ink },
-  fab: { position: "absolute", right: spacing.lg, bottom: spacing.xl, width: 64, height: 64, borderRadius: 32, backgroundColor: palette.accent, alignItems: "center", justifyContent: "center", shadowColor: "#1C1C1E", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.18, shadowRadius: 18, elevation: 6 },
-  fabPressed: { backgroundColor: palette.accentStrong },
+  startMissionButton: {
+    minWidth: 180,
+    minHeight: 52,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.accent,
+    paddingHorizontal: spacing.lg,
+  },
+  startMissionButtonPressed: {
+    backgroundColor: palette.accentStrong,
+  },
+  startMissionButtonText: {
+    fontSize: typography.body,
+    fontWeight: "800",
+    color: palette.white,
+  },
   sheetBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(28, 28, 30, 0.32)" },
   sheetCard: { gap: spacing.sm, borderTopLeftRadius: radii.lg, borderTopRightRadius: radii.lg, backgroundColor: palette.surface, padding: spacing.lg },
   sheetEyebrow: { fontSize: typography.overline, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
