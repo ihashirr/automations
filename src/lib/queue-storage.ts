@@ -1,10 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
+import { defaultMission } from "../constants/missions";
 import { getFileExtension } from "./images";
 import { PendingCapture, ShopDraft } from "../types/shops";
 
-const STORAGE_KEY = "@capture-app/pending-shop-captures:v1";
+const STORAGE_KEY = "@capture-app/pending-shop-captures:v2";
 const queueDirectoryUri =
   FileSystem.documentDirectory != null
     ? `${FileSystem.documentDirectory}pending-shop-captures/`
@@ -30,7 +31,12 @@ export async function loadPendingCaptures() {
   }
 
   try {
-    return JSON.parse(rawQueue) as PendingCapture[];
+    return (JSON.parse(rawQueue) as PendingCapture[]).map((capture) => ({
+      ...capture,
+      category: capture.category?.trim() || "Unsorted",
+      mission: capture.mission?.trim() || defaultMission.label,
+      neighborhood: capture.neighborhood?.trim() || "",
+    }));
   } catch {
     return [];
   }
