@@ -48,12 +48,12 @@ import { useMissionControl } from "../contexts/MissionControlContext";
 import { buildSearchText, formatDistance, normalizeSearchText } from "../lib/format";
 import { playMissionAccomplishedHaptic, playSelectionHaptic } from "../lib/haptics";
 import { calculateDistanceMeters, getLocationLabel, resolveLocationDetails } from "../lib/location";
-import { HomeTabParamList, RootStackParamList } from "../navigation/types";
+import { HomeTabParamList, MissionsStackParamList, RootStackParamList } from "../navigation/types";
 import { CapturedLocation, PendingCapture, ShopSummary } from "../types/shops";
 
 type SortMode = "latest" | "nearest";
 type DashboardNavigation = CompositeNavigationProp<
-  BottomTabNavigationProp<HomeTabParamList, "Missions">,
+  NativeStackNavigationProp<MissionsStackParamList>,
   NativeStackNavigationProp<RootStackParamList>
 >;
 type LeadTarget = { kind: "pending"; capture: PendingCapture } | { kind: "remote"; shop: ShopSummary };
@@ -74,6 +74,7 @@ export function ShopsListScreen() {
     activeCategoryLabel,
     activeMissionId,
     activeMissionLabel,
+    getMissionCategories,
     setActiveCategoryId,
     setActiveMissionId,
   } = useMissionControl();
@@ -95,6 +96,10 @@ export function ShopsListScreen() {
   const [selectedLead, setSelectedLead] = useState<LeadTarget | null>(null);
   const normalizedSearch = normalizeSearchText(useDeferredValue(searchText));
   const mission = getMissionDefinition(activeMissionId);
+  const missionCategories = useMemo(
+    () => getMissionCategories(activeMissionId),
+    [activeMissionId, getMissionCategories],
+  );
   const feed = useQuery(api.shops.listMissionFeed, { mission: activeMissionLabel, limit: 200 });
 
   useEffect(() => {
@@ -181,10 +186,10 @@ export function ShopsListScreen() {
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const category of mission.categories) counts.set(category.label, 0);
+    for (const category of missionCategories) counts.set(category.label, 0);
     for (const row of missionRows) counts.set(getRowCategory(row), (counts.get(getRowCategory(row)) ?? 0) + 1);
     return counts;
-  }, [mission.categories, missionRows]);
+  }, [missionCategories, missionRows]);
 
   const categoryRows = useMemo(
     () => (activeCategoryLabel ? missionRows.filter((row) => getRowCategory(row) === activeCategoryLabel) : []),
@@ -251,11 +256,13 @@ export function ShopsListScreen() {
   function returnToFolderGrid() {
     void playSelectionHaptic();
     setActiveCategoryId(null);
+    navigation.navigate("MissionsList");
   }
 
   function openCaptureScreen() {
     void playSelectionHaptic();
-    navigation.navigate("Capture");
+    // Use the root navigator to switch tabs if necessary
+    (navigation as any).getParent()?.navigate("Capture");
   }
 
   function renderLead({ item }: { item: DashboardRow }) {
@@ -306,129 +313,110 @@ export function ShopsListScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.hero, activeCategoryLabel && styles.heroCompact]}>
-          {activeCategoryLabel ? (
-            <>
-              <View style={styles.breadcrumbHeader}>
-                <Pressable
-                  accessibilityLabel="Back to missions"
-                  accessibilityRole="button"
-                  hitSlop={10}
-                  onPress={returnToFolderGrid}
-                  style={({ pressed }) => [
-                    styles.breadcrumbBackButton,
-                    pressed && styles.breadcrumbBackButtonPressed,
-                  ]}
-                >
-                  <ArrowLeft color={palette.white} size={18} />
-                </Pressable>
-                <View style={styles.breadcrumbCopy}>
-                  <Text style={styles.eyebrow}>Strategic Mission Dashboard</Text>
-                  <View style={styles.breadcrumbRow}>
-                    <Pressable
-                      accessibilityLabel="Go to mission folders"
-                      accessibilityRole="button"
-                      onPress={returnToFolderGrid}
-                    >
-                      <Text style={styles.breadcrumbLink}>Missions</Text>
-                    </Pressable>
-                    <Text style={styles.breadcrumbSlash}>/</Text>
-                    <Text numberOfLines={1} style={styles.breadcrumbCurrent}>
-                      {activeCategoryLabel}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-              <Text style={[styles.heroSubtitle, styles.heroSubtitleCompact]}>
-                {activeMissionLabel}
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.eyebrow}>Strategic Mission Dashboard</Text>
-              <Text style={styles.heroTitle}>{activeMissionLabel}</Text>
-              <Text style={styles.heroSubtitle}>{activeMissionLabel}</Text>
-              <View style={styles.heroTag}>
-                <Target color={palette.accent} size={14} />
-                <Text style={styles.heroTagText}>Folder View</Text>
-              </View>
-              <View style={styles.missionRow}>
-                {missionCatalog.map((option) => (
-                  <Pressable
-                    key={option.id}
-                    onPress={() => {
-                      void playSelectionHaptic();
-                      setActiveMissionId(option.id);
-                    }}
-                    style={({ pressed }) => [
-                      styles.missionChip,
-                      option.id === activeMissionId && styles.missionChipActive,
-                      pressed && option.id !== activeMissionId && styles.missionChipPressed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.missionChipText,
-                        option.id === activeMissionId && styles.missionChipTextActive,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </>
-          )}
-        </View>
 
         <View style={styles.syncBar}>
           <View style={styles.syncRow}>
             {isOnline ? <Wifi color={palette.success} size={16} /> : <WifiOff color={palette.warning} size={16} />}
             <Text numberOfLines={1} style={styles.syncText}>
-              {locationIssue
-                ? locationIssue
-                : currentLocation
-                  ? `${isOnline ? "Mission Sync Live" : "Offline queue active"} • ${getLocationLabel(currentLocation)}`
-                  : isOnline
-                    ? "Mission Sync Live"
-                    : "Offline queue active"}
+              {currentLocation ? `Sync Live • ${getLocationLabel(currentLocation)}` : "Sync Live"}
             </Text>
           </View>
-          <Text style={styles.syncMeta}>
-            {pendingCount > 0 ? `${pendingCount} queued` : isFlushing ? "Syncing" : "Ready"}
-          </Text>
         </View>
 
         {isLoading ? (
           <View style={styles.centerState}>
             <ActivityIndicator color={palette.accent} />
-            <Text style={styles.centerText}>Loading mission data...</Text>
           </View>
         ) : !activeCategoryId ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Folders</Text>
-              <Text style={styles.sectionMeta}>{missionRows.length} leads</Text>
+          <View style={styles.dashboard}>
+            {/* Layer 1: Mission Stats Ribbon */}
+            <View style={styles.statsRibbon}>
+              <View style={styles.ribbonCard}>
+                <Text style={styles.ribbonValue}>{feed?.length || 0}</Text>
+                <Text style={styles.ribbonLabel}>LIVE LEADS</Text>
+              </View>
+              <View style={[styles.ribbonCard, { backgroundColor: "#161719" }]}>
+                <Text style={[styles.ribbonValue, { color: palette.white }]}>{pendingCount}</Text>
+                <Text style={[styles.ribbonLabel, { color: "#B4AC9F" }]}>PENDING</Text>
+              </View>
             </View>
-            <View style={styles.folderGrid}>
-              {mission.categories.map((category) => {
-                const Icon = categoryIcons[category.id as keyof typeof categoryIcons] ?? Store;
-                return (
-                  <Pressable
-                    key={category.id}
+
+            {/* Layer 2: Recent Activity Carousel */}
+            <View style={styles.section}>
+              <Text style={styles.sectionHeaderLabel}>RECENT ACTIVITY</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={styles.recentCarousel}
+              >
+                {missionRows.slice(0, 5).map((row, idx) => (
+                  <Pressable 
+                    key={idx} 
                     onPress={() => {
-                      void playSelectionHaptic();
-                      setActiveCategoryId(category.id);
+                        void playSelectionHaptic();
+                        if (row.kind === "remote") {
+                            navigation.navigate("ShopDetail", { shopId: row.shop._id });
+                        }
                     }}
-                    style={({ pressed }) => [styles.folderCard, pressed && styles.folderCardPressed]}
+                    style={styles.recentCard}
                   >
-                    <View style={styles.folderIcon}><Icon color={palette.accent} size={22} /></View>
-                    <Text style={styles.folderName}>{category.label}</Text>
-                    <Text style={styles.folderCount}>{categoryCounts.get(category.label) ?? 0} leads</Text>
+                    <View style={styles.recentIconBox}>
+                       <Sparkles color={palette.accent} size={16} />
+                    </View>
+                    <Text numberOfLines={1} style={styles.recentName}>{getRowName(row)}</Text>
+                    <Text style={styles.recentMeta}>{getRowNeighborhood(row) || "Unknown"}</Text>
                   </Pressable>
-                );
-              })}
+                ))}
+                {missionRows.length === 0 && (
+                  <View style={styles.emptyRecent}>
+                    <Text style={styles.emptyRecentText}>No recent activity</Text>
+                  </View>
+                )}
+              </ScrollView>
             </View>
+
+            {/* Layer 3: Folder Grid */}
+            <View style={styles.section}>
+              <Text style={styles.sectionHeaderLabel}>MISSION FOLDERS</Text>
+              <View style={styles.folderGrid}>
+                {missionCategories.map((category) => {
+                  const Icon = categoryIcons[category.id as keyof typeof categoryIcons] ?? Store;
+                  return (
+                    <Pressable
+                      key={category.id}
+                      onPress={() => {
+                        void playSelectionHaptic();
+                        setActiveCategoryId(category.id);
+                        navigation.navigate("MissionDetail", {
+                          missionId: activeMissionId,
+                          categoryId: category.id,
+                        });
+                      }}
+                      style={({ pressed }) => [styles.folderCard, pressed && styles.folderCardPressed]}
+                    >
+                      <View style={styles.folderIcon}>
+                        <Icon color={palette.accent} size={22} />
+                      </View>
+                      <View style={styles.folderInfo}>
+                        <Text style={styles.folderName}>{category.label}</Text>
+                        <Text style={styles.folderCount}>{categoryCounts.get(category.label) ?? 0} leads</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Pressable 
+              onPress={() => {
+                void playSelectionHaptic();
+                navigation.navigate("MissionHub");
+              }}
+              style={styles.changeMissionButton}
+            >
+              <ArrowLeft color={palette.mutedInk} size={16} />
+              <Text style={styles.changeMissionText}>Switch Operational Module</Text>
+            </Pressable>
           </View>
         ) : (
           <View style={styles.section}>
@@ -514,7 +502,13 @@ export function ShopsListScreen() {
         )}
       </ScrollView>
 
-      <MoveSheet activeMissionId={activeMissionId} onClose={() => setSelectedLead(null)} onMove={handleMoveLead} selectedLead={selectedLead} />
+      <MoveSheet
+        activeMissionId={activeMissionId}
+        getMissionCategories={getMissionCategories}
+        onClose={() => setSelectedLead(null)}
+        onMove={handleMoveLead}
+        selectedLead={selectedLead}
+      />
     </View>
   );
 }
@@ -564,16 +558,19 @@ function AreaChip({ active, label, onPress }: { active: boolean; label: string; 
 
 function MoveSheet({
   activeMissionId,
+  getMissionCategories,
   onClose,
   onMove,
   selectedLead,
 }: {
   activeMissionId: string;
+  getMissionCategories: (missionId?: string | null) => { id: string; label: string }[];
   onClose: () => void;
   onMove: (missionLabel: string, categoryLabel: string) => Promise<void>;
   selectedLead: LeadTarget | null;
 }) {
   const mission = getMissionDefinition(activeMissionId);
+  const categories = getMissionCategories(activeMissionId);
 
   return (
     <Modal animationType="slide" transparent visible={selectedLead !== null} onRequestClose={onClose}>
@@ -588,7 +585,7 @@ function MoveSheet({
           <Text style={styles.sheetEyebrow}>Move Lead</Text>
           <Text style={styles.sheetTitle}>{selectedLead ? getRowName(selectedLead) : "Lead"}</Text>
           <Text style={styles.sheetSectionTitle}>Move To Folder</Text>
-          {mission.categories.map((category) => (
+          {categories.map((category) => (
             <Pressable
               key={category.id}
               onPress={() => {
@@ -606,7 +603,11 @@ function MoveSheet({
               key={missionOption.id}
               onPress={() => {
                 void playSelectionHaptic();
-                const fallback = missionOption.categories.find((category) => category.id === "unsorted")?.label ?? missionOption.categories[0]?.label ?? "Unsorted";
+                const missionOptionCategories = getMissionCategories(missionOption.id);
+                const fallback =
+                  missionOptionCategories.find((category) => category.id === "unsorted")?.label ??
+                  missionOptionCategories[0]?.label ??
+                  "Unsorted";
                 void onMove(missionOption.label, fallback);
               }}
               style={styles.sheetButton}
@@ -662,37 +663,22 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.background },
   content: { gap: spacing.lg },
   contentCompact: { gap: spacing.md },
-  hero: { gap: spacing.md, backgroundColor: "#161719", paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, paddingTop: spacing.lg },
-  heroCompact: { gap: spacing.sm, paddingBottom: spacing.md, paddingTop: spacing.md },
-  eyebrow: { fontSize: typography.overline, fontWeight: "700", color: "#B4AC9F", letterSpacing: 1.2, textTransform: "uppercase" },
-  heroTitle: { fontSize: 32, lineHeight: 36, fontWeight: "800", color: palette.white },
-  heroSubtitle: { fontSize: typography.body, lineHeight: 22, color: "#E6DFD4" },
-  heroSubtitleCompact: { fontSize: typography.label, lineHeight: 20, color: "#D8D0C2" },
-  breadcrumbHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  breadcrumbBackButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#232529",
-  },
-  breadcrumbBackButtonPressed: {
-    backgroundColor: "#2E3137",
-  },
-  breadcrumbCopy: { flex: 1, gap: spacing.xs },
-  breadcrumbRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  breadcrumbLink: { fontSize: typography.title, fontWeight: "700", color: "#E6DFD4" },
-  breadcrumbSlash: { fontSize: typography.title, fontWeight: "700", color: "#817A70" },
-  breadcrumbCurrent: { flex: 1, fontSize: typography.title, fontWeight: "800", color: palette.white },
-  heroTag: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: spacing.xs, borderRadius: radii.pill, backgroundColor: "#232529", paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  heroTagText: { fontSize: typography.overline, fontWeight: "700", color: palette.white, textTransform: "uppercase", letterSpacing: 0.8 },
-  missionRow: { flexDirection: "row", gap: spacing.sm },
-  missionChip: { borderRadius: radii.pill, borderWidth: 1, borderColor: "#40434A", paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  missionChipActive: { borderColor: palette.accent, backgroundColor: "#2A1F1A" },
-  missionChipPressed: { backgroundColor: "#232529" },
-  missionChipText: { fontSize: typography.label, fontWeight: "700", color: "#D6CFBF" },
-  missionChipTextActive: { color: palette.white },
+  dashboard: { gap: spacing.lg },
+  statsRibbon: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.lg },
+  ribbonCard: { flex: 1, backgroundColor: palette.surface, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, padding: spacing.md, alignItems: "center", gap: 4 },
+  ribbonValue: { fontSize: 22, fontWeight: "800", color: palette.ink },
+  ribbonLabel: { fontSize: 10, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
+  sectionHeaderLabel: { fontSize: 11, fontWeight: "800", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: spacing.xs },
+  recentCarousel: { gap: spacing.sm, paddingRight: spacing.lg },
+  recentCard: { width: 140, backgroundColor: palette.surface, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, padding: spacing.sm, gap: 4 },
+  recentIconBox: { width: 28, height: 28, borderRadius: radii.sm, backgroundColor: palette.accentSoft, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  recentName: { fontSize: 14, fontWeight: "700", color: palette.ink },
+  recentMeta: { fontSize: 11, color: palette.mutedInk, fontWeight: "600" },
+  emptyRecent: { height: 80, justifyContent: "center", paddingHorizontal: spacing.md },
+  emptyRecentText: { fontSize: 12, color: palette.mutedInk, fontStyle: "italic" },
+  folderInfo: { flex: 1, gap: 2 },
+  changeMissionButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: palette.line, marginTop: spacing.md },
+  changeMissionText: { fontSize: 13, fontWeight: "700", color: palette.mutedInk },
   syncBar: { marginHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, borderRadius: radii.pill, backgroundColor: palette.backgroundMuted, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   syncRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   syncText: { flex: 1, fontSize: typography.label, fontWeight: "700", color: palette.ink },

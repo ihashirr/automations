@@ -27,8 +27,6 @@ import {
 import { PhotoStrip } from "../components/PhotoStrip";
 import {
   defaultMission,
-  getCategoryDefinition,
-  getCategoryIdFromLabel,
   getMissionDefinition,
   missionCatalog,
 } from "../constants/missions";
@@ -79,8 +77,12 @@ export function CaptureScreen() {
   const {
     activeCategoryId,
     activeCategoryLabel,
+    addMissionCategory,
     activeMissionId,
     activeMissionLabel,
+    getCategoryById,
+    getCategoryIdFromLabel,
+    getMissionCategories,
     startCategoryMission,
   } = useMissionControl();
   const { isOnline, pendingCount, saveCapture } = useCaptureQueue();
@@ -159,7 +161,7 @@ export function CaptureScreen() {
 
   function applyFolderSelection(missionId: string, categoryId: string) {
     const mission = getMissionDefinition(missionId);
-    const category = getCategoryDefinition(missionId, categoryId);
+    const category = getCategoryById(missionId, categoryId);
 
     setDraft((current) => ({
       ...current,
@@ -304,11 +306,135 @@ export function CaptureScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 96 : 0}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <View style={[styles.screen, { paddingBottom: insets.bottom + spacing.sm }]}>
+      <View style={styles.screen}>
+        {/* Top 40%: Camera Preview Placeholder */}
+        <View style={styles.cameraPreview}>
+          <View style={styles.cameraPlaceholder}>
+            <Camera color={palette.mutedInk} size={48} strokeWidth={1} />
+            <Text style={styles.cameraPlaceholderText}>Live Preview</Text>
+          </View>
+          
+          <View style={styles.cameraOverlays}>
+            <View style={styles.utilityPill}>
+              {isOnline ? (
+                <SignalHigh color={palette.success} size={13} />
+              ) : (
+                <SignalZero color={palette.warning} size={13} />
+              )}
+              <Text style={styles.utilityText}>{isOnline ? "Live" : "Queued"}</Text>
+            </View>
+
+            <Pressable
+              onPress={() => {
+                void playSelectionHaptic();
+                openFolderPicker();
+              }}
+              style={styles.folderPill}
+            >
+              <FolderOpen color={palette.white} size={14} />
+              <Text numberOfLines={1} style={styles.folderPillText}>
+                {draft.category || "Unsorted"}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.cameraFooter}>
+             <PhotoStrip images={draft.images} onRemove={removeImage} />
+             <View style={styles.mediaActions}>
+                <Pressable onPress={() => { void playSelectionHaptic(); void requestCameraAndCapture(); }} style={styles.mediaButton}>
+                  <Camera color={palette.white} size={20} />
+                </Pressable>
+                <Pressable onPress={() => { void playSelectionHaptic(); void requestLibraryAndPick(); }} style={styles.mediaButton}>
+                  <Images color={palette.white} size={20} />
+                </Pressable>
+             </View>
+          </View>
+        </View>
+
+        {/* Bottom 60%: Input Cluster */}
+        <View style={styles.inputCluster}>
+          <TextInput
+            autoFocus
+            onChangeText={(value) => updateField("name", value)}
+            placeholder="SHOP NAME"
+            placeholderTextColor="#C7C1B5"
+            ref={nameRef}
+            style={styles.largeInput}
+            value={draft.name}
+          />
+
+          <View style={styles.fieldRow}>
+            <View style={styles.fieldHalf}>
+              <Text style={styles.inputLabel}>PHONE</Text>
+              <TextInput
+                keyboardType="phone-pad"
+                onChangeText={(value) => updateField("phone", value)}
+                placeholder="+971..."
+                placeholderTextColor={palette.mutedInk}
+                ref={phoneRef}
+                style={styles.simpleInput}
+                value={draft.phone}
+              />
+            </View>
+            <View style={styles.fieldHalf}>
+              <Text style={styles.inputLabel}>MANAGER</Text>
+              <TextInput
+                onChangeText={(value) => updateField("contactPerson", value)}
+                placeholder="Name"
+                placeholderTextColor={palette.mutedInk}
+                ref={contactRef}
+                style={styles.simpleInput}
+                value={draft.contactPerson}
+              />
+            </View>
+          </View>
+
+          <View style={styles.locationSection}>
+            <View style={styles.locationHeader}>
+              <Text style={styles.inputLabel}>NEIGHBORHOOD</Text>
+              <Pressable onPress={() => void handlePinLocation()} style={styles.pinButton}>
+                {isPinningLocation ? (
+                  <ActivityIndicator color={palette.accent} size="small" />
+                ) : (
+                  <MapPinned color={draft.location ? palette.success : palette.accent} size={18} />
+                )}
+              </Pressable>
+            </View>
+            <TextInput
+              onChangeText={(value) => updateField("neighborhood", value)}
+              placeholder="Detecting..."
+              placeholderTextColor={palette.mutedInk}
+              style={styles.neighborhoodInput}
+              value={draft.neighborhood}
+            />
+          </View>
+        </View>
+
+        {/* Floating SAVE FAB */}
+        <Pressable
+          disabled={saveDisabled}
+          onPress={() => {
+            void playSelectionHaptic();
+            void handleSave();
+          }}
+          style={({ pressed }) => [
+            styles.saveFab,
+            saveDisabled && styles.saveFabDisabled,
+            pressed && styles.saveFabPressed,
+          ]}
+        >
+          {isSaving ? (
+            <ActivityIndicator color={palette.white} />
+          ) : showSavedCheck ? (
+            <Check color={palette.white} size={28} strokeWidth={3} />
+          ) : (
+            <Check color={palette.white} size={28} strokeWidth={3} />
+          )}
+        </Pressable>
+
         {flashState ? (
           <View
             style={[
@@ -316,187 +442,18 @@ export function CaptureScreen() {
               flashState.tone === "success" && styles.toastSuccess,
               flashState.tone === "warning" && styles.toastWarning,
               flashState.tone === "error" && styles.toastError,
+              { bottom: insets.bottom + 100 },
             ]}
           >
             <Text style={styles.toastText}>{flashState.message}</Text>
           </View>
         ) : null}
 
-        <View style={styles.utilityRow}>
-          <View style={styles.utilityPill}>
-            {isOnline ? (
-              <SignalHigh color={palette.success} size={13} />
-            ) : (
-              <SignalZero color={palette.warning} size={13} />
-            )}
-            <Text style={styles.utilityText}>{isOnline ? "Live" : "Queued"}</Text>
-          </View>
-
-          <Pressable
-            accessibilityLabel="Choose destination folder"
-            accessibilityRole="button"
-            onPress={() => {
-              void playSelectionHaptic();
-              openFolderPicker();
-            }}
-            style={({ pressed }) => [styles.folderPill, pressed && styles.folderPillPressed]}
-          >
-            <FolderOpen color={palette.ink} size={14} />
-            <Text numberOfLines={1} style={styles.folderPillText}>
-              {draft.category || "Unsorted"}
-            </Text>
-            <ChevronDown color={palette.mutedInk} size={14} />
-          </Pressable>
-
-          <View style={styles.queuePill}>
-            <Text style={styles.queuePillText}>{pendingCount}</Text>
-          </View>
-        </View>
-
-        <Pressable
-          accessibilityLabel="Pin current location"
-          accessibilityRole="button"
-          onPress={() => void handlePinLocation()}
-          style={({ pressed }) => [
-            styles.locationBar,
-            pressed && !isPinningLocation && styles.locationBarPressed,
-          ]}
-        >
-          <View style={styles.locationGlyph}>
-            {isPinningLocation ? (
-              <ActivityIndicator color={palette.accent} size="small" />
-            ) : draft.location ? (
-              <Check color={palette.success} size={16} />
-            ) : (
-              <MapPinned color={palette.accent} size={16} />
-            )}
-          </View>
-          <View style={styles.locationCopy}>
-            <Text style={styles.locationPrimary}>
-              {draft.location ? getLocationLabel(draft.location) : "Pin Location"}
-            </Text>
-            <Text numberOfLines={1} style={styles.locationSecondary}>
-              {draft.location
-                ? draft.neighborhood || formatCoordinates(draft.location)
-                : draft.category || defaultMission.label}
-            </Text>
-          </View>
-          {draft.location ? (
-            <Text style={styles.locationMeta}>{formatCoordinates(draft.location)}</Text>
-          ) : null}
-        </Pressable>
-
-        <View style={styles.formGrid}>
-          <View style={styles.fieldRow}>
-            <CompactField
-              autoFocus
-              containerStyle={styles.fieldHalf}
-              label="Shop"
-              onChangeText={(value) => updateField("name", value)}
-              onSubmitEditing={() => phoneRef.current?.focus()}
-              placeholder="Al Noor Grocery"
-              ref={nameRef}
-              returnKeyType="next"
-              value={draft.name}
-            />
-            <CompactField
-              containerStyle={styles.fieldHalf}
-              keyboardType="phone-pad"
-              label="Phone"
-              onChangeText={(value) => updateField("phone", value)}
-              onSubmitEditing={() => contactRef.current?.focus()}
-              placeholder="+971..."
-              ref={phoneRef}
-              returnKeyType="next"
-              value={draft.phone}
-            />
-          </View>
-
-          <View style={styles.fieldRow}>
-            <CompactField
-              containerStyle={styles.fieldHalf}
-              keyboardType="default"
-              label="Contact"
-              onChangeText={(value) => updateField("contactPerson", value)}
-              onSubmitEditing={() => referredByRef.current?.focus()}
-              placeholder="Manager"
-              ref={contactRef}
-              returnKeyType="next"
-              value={draft.contactPerson}
-            />
-            <CompactField
-              containerStyle={styles.fieldHalf}
-              keyboardType="default"
-              label="Referred"
-              onChangeText={(value) => updateField("referredBy", value)}
-              onSubmitEditing={() => {
-                void handleSave();
-              }}
-              placeholder="Source"
-              ref={referredByRef}
-              returnKeyType="done"
-              value={draft.referredBy}
-            />
-          </View>
-        </View>
-
-        <View style={styles.mediaRow}>
-          <UtilityActionButton
-            icon={<Camera color={palette.ink} size={18} />}
-            label="Camera"
-            onPress={() => {
-              void playSelectionHaptic();
-              void requestCameraAndCapture();
-            }}
-          />
-          <UtilityActionButton
-            icon={<Images color={palette.ink} size={18} />}
-            label="Photos"
-            onPress={() => {
-              void playSelectionHaptic();
-              void requestLibraryAndPick();
-            }}
-          />
-        </View>
-
-        <PhotoStrip images={draft.images} onRemove={removeImage} />
-
-        <View style={styles.flexSpacer} />
-
-        <View style={styles.footer}>
-          <View style={styles.footerMeta}>
-            <Text numberOfLines={1} style={styles.footerTitle}>
-              {draft.location ? getLocationLabel(draft.location) : draft.category || "Unsorted"}
-            </Text>
-            <Text style={styles.footerSubtitle}>{draft.mission || defaultMission.label}</Text>
-          </View>
-          <Pressable
-            accessibilityLabel="Save lead"
-            accessibilityRole="button"
-            disabled={saveDisabled}
-            onPress={() => {
-              void playSelectionHaptic();
-              void handleSave();
-            }}
-            style={({ pressed }) => [
-              styles.saveButton,
-              saveDisabled && styles.saveButtonDisabled,
-              pressed && !saveDisabled && styles.saveButtonPressed,
-            ]}
-          >
-            {isSaving ? (
-              <ActivityIndicator color={palette.white} />
-            ) : showSavedCheck ? (
-              <Check color={palette.white} size={18} />
-            ) : (
-              <Text style={styles.saveButtonText}>Save</Text>
-            )}
-          </Pressable>
-        </View>
-
         <FolderPickerSheet
           activeMissionId={pickerMissionId}
+          getCategoriesForMission={getMissionCategories}
           onClose={() => setIsFolderPickerOpen(false)}
+          onCreateCategory={({ label, missionId }) => addMissionCategory({ label, missionId })}
           onMissionChange={setPickerMissionId}
           onSelect={applyFolderSelection}
           selectedCategoryId={selectedCategoryId}
@@ -507,63 +464,39 @@ export function CaptureScreen() {
   );
 }
 
-const CompactField = forwardRef<
-  TextInput,
-  React.ComponentProps<typeof TextInput> & {
-    containerStyle?: object;
-    label: string;
-  }
->(function CompactField({ containerStyle, label, style, ...textInputProps }, ref) {
-  return (
-    <View style={[styles.fieldCard, containerStyle]}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        placeholderTextColor={palette.mutedInk}
-        ref={ref}
-        style={[styles.fieldInput, style]}
-        {...textInputProps}
-      />
-    </View>
-  );
-});
-
-function UtilityActionButton({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.utilityAction, pressed && styles.utilityActionPressed]}
-    >
-      {icon}
-      <Text style={styles.utilityActionLabel}>{label}</Text>
-    </Pressable>
-  );
-}
 
 function FolderPickerSheet({
   activeMissionId,
+  getCategoriesForMission,
   onClose,
+  onCreateCategory,
   onMissionChange,
   onSelect,
   selectedCategoryId,
   visible,
 }: {
   activeMissionId: string;
+  getCategoriesForMission: (missionId: string) => { id: string; label: string }[];
   onClose: () => void;
+  onCreateCategory: (options: { label: string; missionId?: string }) => { id: string; label: string } | null;
   onMissionChange: (missionId: string) => void;
   onSelect: (missionId: string, categoryId: string) => void;
   selectedCategoryId: string | null;
   visible: boolean;
 }) {
-  const mission = getMissionDefinition(activeMissionId);
+  const [newFolderName, setNewFolderName] = useState("");
+  const missionCategories = getCategoriesForMission(activeMissionId);
+
+  function handleCreateFolder() {
+    const created = onCreateCategory({ label: newFolderName, missionId: activeMissionId });
+
+    if (!created) {
+      return;
+    }
+
+    setNewFolderName("");
+    onSelect(activeMissionId, created.id);
+  }
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
@@ -576,6 +509,28 @@ function FolderPickerSheet({
       >
         <Pressable style={styles.sheetCard} onPress={() => {}}>
           <Text style={styles.sheetEyebrow}>Folder</Text>
+          <View style={styles.sheetCreateRow}>
+            <TextInput
+              onChangeText={setNewFolderName}
+              placeholder="Create new folder"
+              placeholderTextColor={palette.mutedInk}
+              style={styles.sheetCreateInput}
+              value={newFolderName}
+            />
+            <Pressable
+              onPress={() => {
+                void playSelectionHaptic();
+                handleCreateFolder();
+              }}
+              style={({ pressed }) => [
+                styles.sheetCreateButton,
+                !newFolderName.trim() && styles.sheetCreateButtonDisabled,
+                pressed && newFolderName.trim() && styles.sheetCreateButtonPressed,
+              ]}
+            >
+              <Text style={styles.sheetCreateButtonText}>Add</Text>
+            </Pressable>
+          </View>
           <View style={styles.sheetMissionRow}>
             {missionCatalog.map((option) => (
               <Pressable
@@ -602,7 +557,7 @@ function FolderPickerSheet({
             ))}
           </View>
           <View style={styles.sheetCategoryList}>
-            {mission.categories.map((category) => (
+            {missionCategories.map((category) => (
               <Pressable
                 key={category.id}
                 onPress={() => {
@@ -639,14 +594,139 @@ const styles = StyleSheet.create({
   },
   screen: {
     flex: 1,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+  },
+  cameraPreview: {
+    height: "40%",
+    backgroundColor: "#161719",
+    position: "relative",
+  },
+  cameraPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
     gap: spacing.sm,
   },
+  cameraPlaceholderText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: palette.mutedInk,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  cameraOverlays: {
+    position: "absolute",
+    top: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  cameraFooter: {
+    position: "absolute",
+    bottom: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  mediaActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  mediaButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inputCluster: {
+    height: "60%",
+    padding: spacing.xl,
+    gap: spacing.lg,
+  },
+  largeInput: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: palette.ink,
+    padding: 0,
+  },
+  fieldRow: {
+    flexDirection: "row",
+    gap: spacing.lg,
+  },
+  fieldHalf: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: palette.mutedInk,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  simpleInput: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: palette.ink,
+    padding: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.line,
+    paddingBottom: 4,
+  },
+  locationSection: {
+    gap: 4,
+  },
+  locationHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  pinButton: {
+    padding: 4,
+  },
+  neighborhoodInput: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: palette.accentStrong,
+    padding: 0,
+  },
+  saveFab: {
+    position: "absolute",
+    bottom: spacing.xl + 20,
+    right: spacing.xl,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#E96B39",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#E96B39",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  saveFabDisabled: {
+    backgroundColor: "#C7C1B5",
+    shadowOpacity: 0,
+  },
+  saveFabPressed: {
+    transform: [{ scale: 0.95 }],
+    backgroundColor: "#D35A2D",
+  },
   toast: {
+    position: "absolute",
+    left: spacing.md,
+    right: spacing.md,
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    zIndex: 100,
   },
   toastSuccess: {
     backgroundColor: palette.successSoft,
@@ -658,247 +738,114 @@ const styles = StyleSheet.create({
     backgroundColor: palette.dangerSoft,
   },
   toastText: {
-    fontSize: typography.label,
+    fontSize: 14,
     fontWeight: "700",
     color: palette.ink,
-  },
-  utilityRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
+    textAlign: "center",
   },
   utilityPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
     borderRadius: radii.pill,
-    backgroundColor: palette.syncBadge,
+    backgroundColor: "rgba(255,255,255,0.1)",
     paddingHorizontal: spacing.sm,
-    paddingVertical: 7,
+    paddingVertical: 6,
   },
   utilityText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: palette.ink,
+    color: palette.white,
     textTransform: "uppercase",
-    letterSpacing: 0.8,
   },
   folderPill: {
-    flex: 1,
-    minHeight: 34,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
     borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.surface,
-    paddingHorizontal: spacing.sm,
-  },
-  folderPillPressed: {
-    backgroundColor: palette.backgroundMuted,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
   },
   folderPillText: {
-    flex: 1,
-    fontSize: typography.label,
-    fontWeight: "700",
-    color: palette.ink,
-  },
-  queuePill: {
-    minWidth: 34,
-    minHeight: 34,
-    borderRadius: radii.pill,
-    backgroundColor: palette.backgroundMuted,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.xs,
-  },
-  queuePillText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: palette.ink,
-  },
-  locationBar: {
-    minHeight: 62,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.surface,
-    paddingHorizontal: spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  locationBarPressed: {
-    backgroundColor: palette.backgroundMuted,
-  },
-  locationGlyph: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: palette.backgroundMuted,
-  },
-  locationCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  locationPrimary: {
-    fontSize: typography.label,
-    fontWeight: "700",
-    color: palette.ink,
-  },
-  locationSecondary: {
-    fontSize: 12,
-    color: palette.mutedInk,
-  },
-  locationMeta: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: palette.mutedInk,
-  },
-  formGrid: {
-    gap: spacing.xs,
-  },
-  fieldRow: {
-    flexDirection: "row",
-    gap: spacing.xs,
-  },
-  fieldHalf: {
-    flex: 1,
-  },
-  fieldCard: {
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    gap: 2,
-  },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: palette.mutedInk,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  fieldInput: {
-    minHeight: 28,
-    paddingVertical: 0,
-    fontSize: typography.body,
-    color: palette.ink,
-  },
-  mediaRow: {
-    flexDirection: "row",
-    gap: spacing.xs,
-  },
-  utilityAction: {
-    flex: 1,
-    minHeight: 56,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.surface,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  utilityActionPressed: {
-    backgroundColor: palette.backgroundMuted,
-  },
-  utilityActionLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: palette.ink,
+    color: palette.white,
   },
   flexSpacer: {
     flex: 1,
   },
-  footer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: palette.line,
-    paddingTop: spacing.sm,
-  },
-  footerMeta: {
-    flex: 1,
-    gap: 2,
-  },
-  footerTitle: {
-    fontSize: typography.label,
-    fontWeight: "700",
-    color: palette.ink,
-  },
-  footerSubtitle: {
-    fontSize: 12,
-    color: palette.mutedInk,
-  },
-  saveButton: {
-    minWidth: 108,
-    minHeight: 48,
-    borderRadius: radii.md,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: palette.accent,
-    paddingHorizontal: spacing.lg,
-  },
-  saveButtonPressed: {
-    backgroundColor: palette.accentStrong,
-  },
-  saveButtonDisabled: {
-    opacity: 0.45,
-  },
-  saveButtonText: {
-    fontSize: typography.body,
-    fontWeight: "800",
-    color: palette.white,
-  },
   sheetBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(28, 28, 30, 0.32)",
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   sheetCard: {
-    gap: spacing.md,
+    backgroundColor: palette.surface,
     borderTopLeftRadius: radii.lg,
     borderTopRightRadius: radii.lg,
-    backgroundColor: palette.surface,
-    padding: spacing.lg,
+    padding: spacing.xl,
+    gap: spacing.lg,
+    maxHeight: "80%",
   },
   sheetEyebrow: {
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "800",
     color: palette.mutedInk,
     textTransform: "uppercase",
     letterSpacing: 1,
+  },
+  sheetCreateRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  sheetCreateInput: {
+    flex: 1,
+    backgroundColor: palette.backgroundMuted,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    height: 48,
+    fontSize: 16,
+    color: palette.ink,
+  },
+  sheetCreateButton: {
+    backgroundColor: palette.accent,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.xl,
+    justifyContent: "center",
+  },
+  sheetCreateButtonDisabled: {
+    opacity: 0.5,
+  },
+  sheetCreateButtonPressed: {
+    opacity: 0.8,
+  },
+  sheetCreateButtonText: {
+    color: palette.white,
+    fontWeight: "700",
   },
   sheetMissionRow: {
     flexDirection: "row",
     gap: spacing.sm,
   },
   sheetMissionChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: palette.line,
-    backgroundColor: palette.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
   },
   sheetMissionChipActive: {
-    borderColor: palette.accent,
     backgroundColor: palette.accent,
+    borderColor: palette.accent,
   },
   sheetMissionChipPressed: {
     backgroundColor: palette.backgroundMuted,
   },
   sheetMissionChipText: {
-    fontSize: typography.label,
+    fontSize: 13,
     fontWeight: "700",
-    color: palette.ink,
+    color: palette.mutedInk,
   },
   sheetMissionChipTextActive: {
     color: palette.white,
@@ -907,26 +854,23 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   sheetCategoryButton: {
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.card,
-    paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
   },
   sheetCategoryButtonActive: {
-    borderColor: palette.accent,
     backgroundColor: palette.accentSoft,
   },
   sheetCategoryButtonPressed: {
     backgroundColor: palette.backgroundMuted,
   },
   sheetCategoryButtonText: {
-    fontSize: typography.body,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "600",
     color: palette.ink,
   },
   sheetCategoryButtonTextActive: {
     color: palette.accentStrong,
+    fontWeight: "700",
   },
 });

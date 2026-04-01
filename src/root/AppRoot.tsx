@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette } from "../constants/theme";
 import { useMissionControl } from "../contexts/MissionControlContext";
 import { playSelectionHaptic } from "../lib/haptics";
-import { HomeTabParamList, RootStackParamList } from "../navigation/types";
+import { HomeTabParamList, MissionsStackParamList, RootStackParamList } from "../navigation/types";
 import { CaptureScreen } from "../screens/CaptureScreen";
 import { MapScreen } from "../screens/MapScreen";
 import { ShopDetailScreen } from "../screens/ShopDetailScreen";
@@ -48,6 +48,7 @@ const navigationTheme: NavigationTheme = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const MissionsStackStack = createNativeStackNavigator<MissionsStackParamList>();
 const Tabs = createBottomTabNavigator<HomeTabParamList>();
 
 function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
@@ -70,7 +71,12 @@ function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
           label="Missions"
           onPress={() => {
             setActiveCategoryId(null);
-            handleTabPress({ navigation, route: missionsRoute, state });
+            const isFocused = state.index === state.routes.findIndex((route) => route.key === missionsRoute.key);
+            if (isFocused) {
+              navigation.navigate("Missions", { screen: "MissionHub" });
+            } else {
+              handleTabPress({ navigation, route: missionsRoute, state });
+            }
           }}
         />
         <View style={styles.captureSlot} />
@@ -166,10 +172,14 @@ function CaptureTabButton({
   );
 }
 
-function HomeTabs() {
+import { MissionHubScreen } from "../screens/MissionHubScreen";
+
+function MissionsStack() {
+  const { activeCategoryLabel, activeMissionLabel } = useMissionControl();
+
   return (
-    <Tabs.Navigator
-      tabBar={(props) => <CommandTabBar {...props} />}
+    <MissionsStackStack.Navigator
+      initialRouteName="MissionHub"
       screenOptions={{
         headerShadowVisible: false,
         headerStyle: {
@@ -180,51 +190,82 @@ function HomeTabs() {
           fontWeight: "700",
         },
         headerTintColor: palette.ink,
-        headerTitleAlign: "center",
+        headerTitleAlign: "left",
+      }}
+    >
+      <MissionsStackStack.Screen
+        component={MissionHubScreen}
+        name="MissionHub"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <MissionsStackStack.Screen
+        component={ShopsListScreen}
+        name="MissionsList"
+        options={{
+          headerTitle: activeMissionLabel,
+        }}
+      />
+      <MissionsStackStack.Screen
+        component={ShopsListScreen}
+        name="MissionDetail"
+        options={{
+          headerTitle: () => (
+            <View style={styles.breadcrumbTitle}>
+              <Text style={styles.breadcrumbRoot}>{activeMissionLabel}</Text>
+              <Text style={styles.breadcrumbSeparator}>/</Text>
+              <Text numberOfLines={1} style={styles.breadcrumbCurrent}>
+                {activeCategoryLabel}
+              </Text>
+            </View>
+          ),
+        }}
+      />
+    </MissionsStackStack.Navigator>
+  );
+}
+
+function HomeTabs() {
+  return (
+    <Tabs.Navigator
+      tabBar={(props) => <CommandTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
         tabBarHideOnKeyboard: true,
         sceneStyle: {
           backgroundColor: palette.background,
         },
       }}
     >
-      <Tabs.Screen
-        component={ShopsListScreen}
-        name="Missions"
-        options={{
-          headerTitle: () => <MissionsHeaderTitle />,
-        }}
-      />
-      <Tabs.Screen
-        component={CaptureScreen}
-        name="Capture"
-        options={{
-          title: "Capture",
-          headerTitle: "Rapid Capture",
-        }}
-      />
-      <Tabs.Screen
-        component={MapScreen}
-        name="Map"
-        options={{
-          title: "Map",
-          headerTitle: "Mission Map",
-        }}
-      />
+      <Tabs.Screen component={MissionsStack} name="Missions" />
+      <Tabs.Screen component={CaptureScreen} name="Capture" />
+      <Tabs.Screen component={MapScreen} name="Map" />
     </Tabs.Navigator>
   );
 }
 
-function MissionsHeaderTitle() {
-  const { activeCategoryLabel } = useMissionControl();
-
-  return (
-    <Text numberOfLines={1} style={styles.headerTitle}>
-      {activeCategoryLabel ? `Missions / ${activeCategoryLabel}` : "Missions"}
-    </Text>
-  );
-}
-
 const styles = StyleSheet.create({
+  breadcrumbTitle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  breadcrumbRoot: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: palette.mutedInk,
+  },
+  breadcrumbSeparator: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: palette.line,
+  },
+  breadcrumbCurrent: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: palette.ink,
+  },
   tabBarShell: {
     backgroundColor: palette.white,
     borderTopColor: "#E0DBCF",

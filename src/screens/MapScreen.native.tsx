@@ -150,6 +150,7 @@ export function MapScreen() {
         showsMyLocationButton={false}
         showsUserLocation
         style={StyleSheet.absoluteFill}
+        customMapStyle={mapStyle}
       >
         {pins.map((pin) => (
           <Marker
@@ -163,93 +164,90 @@ export function MapScreen() {
               void playSelectionHaptic();
               setSelectedLead(pin);
             }}
-            title={pin.name}
           >
-            <View style={[styles.dotMarker, pin.status === "queued" && styles.dotMarkerQueued]} />
+            <View style={[
+              styles.markerRing,
+              pin.status === "queued" && styles.markerRingQueued,
+              selectedLead?.id === pin.id && styles.markerRingSelected
+            ]}>
+              <View style={[
+                styles.markerDot,
+                pin.status === "queued" && styles.markerDotQueued,
+                selectedLead?.id === pin.id && styles.markerDotSelected
+              ]} />
+            </View>
           </Marker>
         ))}
       </MapView>
 
-      <View style={[styles.topOverlay, { paddingTop: spacing.sm }]}>
-        <View style={styles.missionBar}>
-          <Text numberOfLines={1} style={styles.missionBarText}>
+      <View style={[styles.topOverlay, { paddingTop: insets.top + spacing.sm }]}>
+        <View style={styles.missionPill}>
+          <Text numberOfLines={1} style={styles.missionPillText}>
             {activeMissionLabel || defaultMission.label}
           </Text>
-          <View style={styles.statsPill}>
-            <Target color={palette.accentStrong} size={12} />
-            <Text style={styles.statsPillText}>{pins.length}</Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{pins.length}</Text>
           </View>
         </View>
 
         <Pressable
-          accessibilityLabel="Refresh current location"
-          accessibilityRole="button"
           onPress={() => {
             void playSelectionHaptic();
             void refreshCurrentLocation();
           }}
-          style={({ pressed }) => [styles.locateButton, pressed && styles.locateButtonPressed]}
+          style={({ pressed }) => [styles.glassButton, pressed && styles.glassButtonPressed]}
         >
           {isLocating ? (
-            <ActivityIndicator color={palette.ink} />
+            <ActivityIndicator color={palette.white} size="small" />
           ) : (
-            <LocateFixed color={palette.ink} size={18} />
+            <LocateFixed color={palette.white} size={20} />
           )}
         </Pressable>
       </View>
 
       {selectedLead ? (
-        <View style={[styles.actionCard, { paddingBottom: insets.bottom + spacing.md }]}>
-          <View style={styles.actionCardHeader}>
-            <View style={styles.actionCardTitleWrap}>
-              <Text style={styles.actionCardTitle}>{selectedLead.name}</Text>
-              <Text style={styles.actionCardSubtitle}>
-                {getLocationLabel(selectedLead.location)}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.statusDot,
-                selectedLead.status === "queued" && styles.statusDotQueued,
-              ]}
-            />
+        <View style={[styles.quickInfo, { paddingBottom: insets.bottom + spacing.xl }]}>
+          <View style={styles.dragHandle} />
+          <View style={styles.infoContent}>
+             <View style={styles.infoText}>
+                <Text style={styles.infoTitle}>{selectedLead.name}</Text>
+                <Text style={styles.infoSubtitle}>{getLocationLabel(selectedLead.location)}</Text>
+             </View>
+             <View style={[styles.statusBadge, selectedLead.status === "queued" && styles.statusBadgeQueued]}>
+                <Text style={styles.statusBadgeText}>{selectedLead.status === "live" ? "Live" : "Pending"}</Text>
+             </View>
           </View>
+
           <View style={styles.actionRow}>
             <Pressable
-              accessibilityLabel={`Call ${selectedLead.name}`}
-              accessibilityRole="button"
               disabled={!selectedLead.phone.trim()}
               onPress={() => {
-                if (!selectedLead.phone.trim()) {
-                  return;
-                }
-
+                if (!selectedLead.phone.trim()) return;
                 void playSelectionHaptic();
                 void Linking.openURL(buildDialLink(selectedLead.phone));
               }}
               style={({ pressed }) => [
-                styles.actionButton,
-                !selectedLead.phone.trim() && styles.actionButtonDisabled,
-                pressed && selectedLead.phone.trim() && styles.actionButtonPressed,
+                styles.ghostButton,
+                !selectedLead.phone.trim() && styles.ghostButtonDisabled,
+                pressed && styles.ghostButtonPressed
               ]}
             >
-              <Phone color={palette.ink} size={18} />
-              <Text style={styles.actionButtonText}>Call</Text>
+              <Phone color={palette.white} size={20} />
+              <Text style={styles.ghostButtonText}>Call</Text>
             </Pressable>
+
             <Pressable
-              accessibilityLabel={`Navigate to ${selectedLead.name}`}
-              accessibilityRole="button"
               onPress={() => {
                 void playSelectionHaptic();
                 void openLocationInMaps(selectedLead.location);
               }}
               style={({ pressed }) => [
-                styles.actionButtonPrimary,
-                pressed && styles.actionButtonPrimaryPressed,
+                styles.primaryButton,
+                pressed && styles.primaryButtonPressed
               ]}
             >
-              <Navigation color={palette.white} size={18} />
-              <Text style={styles.actionButtonPrimaryText}>Navigate</Text>
+              <Navigation color={palette.white} size={20} />
+              <Text style={styles.primaryButtonText}>Route</Text>
             </Pressable>
           </View>
         </View>
@@ -258,158 +256,209 @@ export function MapScreen() {
   );
 }
 
+const mapStyle = [
+  {
+    "featureType": "poi",
+    "elementType": "labels",
+    "stylers": [{ "visibility": "off" }]
+  }
+];
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: "#161719",
   },
   topOverlay: {
     position: "absolute",
     top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.lg,
-    flexDirection: "row",
-    gap: spacing.xs,
-    alignItems: "flex-start",
-  },
-  missionBar: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(255, 255, 255, 0.86)",
-    paddingHorizontal: spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "rgba(224, 219, 207, 0.9)",
-  },
-  missionBarText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "700",
-    color: palette.ink,
-  },
-  statsPill: {
-    minWidth: 44,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: palette.accentSoft,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 4,
-    paddingHorizontal: 8,
-  },
-  statsPillText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: palette.accentStrong,
-  },
-  locateButton: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
-    backgroundColor: "rgba(255,255,255,0.94)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  locateButtonPressed: {
-    backgroundColor: "rgba(243, 238, 227, 0.98)",
-  },
-  dotMarker: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: palette.accent,
-    borderWidth: 2,
-    borderColor: palette.white,
-  },
-  dotMarkerQueued: {
-    backgroundColor: "#F09A6B",
-  },
-  actionCard: {
-    position: "absolute",
     left: spacing.lg,
     right: spacing.lg,
-    bottom: spacing.lg,
-    borderRadius: radii.lg,
-    backgroundColor: "rgba(255,255,255,0.98)",
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  actionCardHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
     gap: spacing.sm,
+    alignItems: "center",
   },
-  actionCardTitleWrap: {
+  missionPill: {
     flex: 1,
-    gap: spacing.xs,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(22, 23, 25, 0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    paddingHorizontal: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  actionCardTitle: {
-    fontSize: typography.title,
+  missionPillText: {
+    fontSize: 14,
     fontWeight: "800",
-    color: palette.ink,
+    color: palette.white,
+    letterSpacing: 0.5,
   },
-  actionCardSubtitle: {
-    fontSize: typography.label,
-    color: palette.mutedInk,
+  countBadge: {
+    paddingHorizontal: 8,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#E96B39",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  statusDot: {
+  countBadgeText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: palette.white,
+  },
+  glassButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(22, 23, 25, 0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  glassButtonPressed: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  markerRing: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(233, 107, 57, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(233, 107, 57, 0.4)",
+  },
+  markerRingQueued: {
+    backgroundColor: "rgba(199, 193, 181, 0.2)",
+    borderColor: "rgba(199, 193, 181, 0.4)",
+  },
+  markerRingSelected: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(233, 107, 57, 0.4)",
+    borderColor: "#E96B39",
+  },
+  markerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#E96B39",
+  },
+  markerDotQueued: {
+    backgroundColor: "#C7C1B5",
+  },
+  markerDotSelected: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: palette.success,
+    backgroundColor: "#E96B39",
   },
-  statusDotQueued: {
-    backgroundColor: palette.accent,
+  quickInfo: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#1C1D1F",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: spacing.xl,
+    gap: spacing.xl,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    alignSelf: "center",
+    marginBottom: -spacing.sm,
+  },
+  infoContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  infoText: {
+    flex: 1,
+    gap: 4,
+  },
+  infoTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: palette.white,
+  },
+  infoSubtitle: {
+    fontSize: 14,
+    color: palette.mutedInk,
+    fontWeight: "600",
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: "rgba(40, 199, 111, 0.15)",
+  },
+  statusBadgeQueued: {
+    backgroundColor: "rgba(233, 107, 57, 0.15)",
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#28C76F",
+    textTransform: "uppercase",
   },
   actionRow: {
     flexDirection: "row",
+    gap: spacing.lg,
+  },
+  ghostButton: {
+    flex: 1,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: spacing.sm,
   },
-  actionButton: {
+  ghostButtonPressed: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  ghostButtonDisabled: {
+    opacity: 0.3,
+  },
+  ghostButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: palette.white,
+  },
+  primaryButton: {
     flex: 1,
-    minHeight: 50,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.surface,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#E96B39",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
-  actionButtonPressed: {
-    backgroundColor: palette.backgroundMuted,
+  primaryButtonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
-  actionButtonDisabled: {
-    opacity: 0.45,
-  },
-  actionButtonText: {
-    fontSize: typography.label,
-    fontWeight: "700",
-    color: palette.ink,
-  },
-  actionButtonPrimary: {
-    flex: 1,
-    minHeight: 50,
-    borderRadius: radii.md,
-    backgroundColor: palette.accent,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-  },
-  actionButtonPrimaryPressed: {
-    backgroundColor: palette.accentStrong,
-  },
-  actionButtonPrimaryText: {
-    fontSize: typography.label,
-    fontWeight: "700",
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: "800",
     color: palette.white,
   },
 });

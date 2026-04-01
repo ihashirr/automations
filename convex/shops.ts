@@ -256,7 +256,7 @@ export const createShopRecord = internalMutation({
     category: v.string(),
     name: v.string(),
     mission: v.string(),
-    neighborhood: v.optional(v.string()),
+    neighborhood: v.string(),
     phone: v.string(),
     contactPerson: v.string(),
     referredBy: v.string(),
@@ -276,9 +276,7 @@ export const createShopRecord = internalMutation({
     const referredBy = normalizeText(args.referredBy);
     const images = args.images.map((imageUrl) => imageUrl.trim());
     const location = normalizeLocation(args.location);
-    const neighborhood =
-      normalizeNeighborhood(args.neighborhood) ||
-      fallbackNeighborhoodFromAddress(location.formattedAddress);
+    const neighborhood = normalizeNeighborhood(args.neighborhood);
 
     if (!name) {
       throw new Error("Shop name is required.");
@@ -339,16 +337,64 @@ export const createShop = action({
       normalizeNeighborhood(args.neighborhood) ||
       fallbackNeighborhoodFromAddress(location.formattedAddress);
 
-    try {
-      neighborhood = neighborhood || (await reverseGeocodeNeighborhood(location));
-    } catch {
-      // Fall back to the client-provided or address-derived neighborhood.
+    let needsBackgroundEnrichment = false;
+
+    if (!neighborhood) {
+      try {
+        // Attempt fast reverse geocode (1s timeout)
+        neighborhood = await Promise.race([
+          reverseGeocodeNeighborhood(location),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), 1000)
+          ),
+        ]);
+      } catch {
+        needsBackgroundEnrichment = true;
+        neighborhood = "Pending..."; // Initial placeholder
+      }
     }
 
-    return await ctx.runMutation(internal.shops.createShopRecord, {
+    const shopId = await ctx.runMutation(internal.shops.createShopRecord, {
       ...args,
       neighborhood,
     });
+
+    if (needsBackgroundEnrichment) {
+      await ctx.scheduler.runAfter(0, internal.shops.enrichNeighborhood, {
+        shopId,
+        location,
+      });
+    }
+
+    return shopId;
+  },
+});
+
+export const enrichNeighborhood = internalMutation({
+  args: {
+    shopId: v.id("shops"),
+    location: v.object({
+      lat: v.number(),
+      lng: v.number(),
+      formattedAddress: v.string(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const shop = await ctx.db.get(args.shopId);
+    if (!shop) return;
+
+    // Only enrich if still "Pending..." or empty
+    if (shop.neighborhood !== "Pending..." && shop.neighborhood !== "") {
+      return;
+    }
+
+    const neighborhood = await reverseGeocodeNeighborhood(args.location);
+    if (neighborhood) {
+      await ctx.db.patch(args.shopId, {
+        neighborhood,
+        updatedAt: Date.now(),
+      });
+    }
   },
 });
 

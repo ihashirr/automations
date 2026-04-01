@@ -1,5 +1,5 @@
-import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import { ChevronRight, MapPin, MessageCircleMore, Phone, UserRound } from "lucide-react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { MessageCircleMore, Navigation, Phone } from "lucide-react-native";
 import { buildDialLink, buildWhatsAppLink, formatCaptureTime, getInitials } from "../lib/format";
 import { buildCloudinaryImageUrl } from "../lib/cloudinary";
 import { openLocationInMaps } from "../lib/maps";
@@ -70,113 +70,67 @@ export function ShopCard({
   }
 
   const content = (
-    <>
-      <View style={styles.media}>
-        {resolvedPreviewImageUrl ? (
-          <Image source={{ uri: resolvedPreviewImageUrl }} style={styles.image} />
-        ) : (
-          <View style={styles.placeholder}>
-            <Text style={styles.placeholderText}>{getInitials(name)}</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.copy}>
-        <View style={styles.topRow}>
-          <View style={styles.badgeRow}>
-            <View
-              style={[
-                styles.badge,
-                statusTone === "queued" ? styles.badgeQueued : styles.badgeLive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.badgeText,
-                  statusTone === "queued" ? styles.badgeTextQueued : styles.badgeTextLive,
-                ]}
-              >
-                {statusLabel}
-              </Text>
+    <View style={styles.contentWrap}>
+      <View style={styles.mainInfo}>
+        <View style={styles.titleRow}>
+          <Text numberOfLines={1} style={styles.name}>
+            {name}
+          </Text>
+          {distanceLabel ? (
+            <View style={styles.distancePill}>
+              <Text style={styles.distanceText}>{distanceLabel}</Text>
             </View>
-            {distanceLabel ? <Text style={styles.distance}>{distanceLabel}</Text> : null}
-          </View>
-          {onPress ? <ChevronRight color={palette.mutedInk} size={18} /> : null}
+          ) : null}
         </View>
-        <Text numberOfLines={2} style={styles.name}>
-          {name}
+        <Text numberOfLines={1} style={styles.subtext}>
+          {contactPerson || "No Manager"} • {neighborhoodLabel}
         </Text>
-
-        <View style={styles.metaRow}>
-          <UserRound color={palette.mutedInk} size={14} />
-          <Text numberOfLines={1} style={styles.meta}>
-            {contactPerson || "Manager unknown"}
-          </Text>
-        </View>
-        <View style={styles.neighborhoodTag}>
-          <MapPin color={palette.accentStrong} size={13} />
-          <Text numberOfLines={1} style={styles.neighborhoodTagText}>
-            {neighborhoodLabel}
-          </Text>
-        </View>
-        <View style={styles.footer}>
-          <Text style={styles.footerTime}>{formatCaptureTime(createdAt)}</Text>
-        </View>
-        <View style={styles.actionRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Call ${name}`}
-            disabled={!hasPhone}
-            onPress={(event) => {
-              event.stopPropagation();
-              void playSelectionHaptic();
-              void handleCall();
-            }}
-            style={({ pressed }) => [
-              styles.actionButton,
-              !hasPhone && styles.actionButtonDisabled,
-              pressed && hasPhone && styles.actionButtonPressed,
-            ]}
-          >
-            <Phone color={hasPhone ? palette.ink : palette.mutedInk} size={16} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Open map for ${name}`}
-            disabled={!location}
-            onPress={(event) => {
-              event.stopPropagation();
-              void playSelectionHaptic();
-              void handleMapPin();
-            }}
-            style={({ pressed }) => [
-              styles.actionButton,
-              !location && styles.actionButtonDisabled,
-              pressed && Boolean(location) && styles.actionButtonPressed,
-            ]}
-          >
-            <MapPin color={location ? palette.ink : palette.mutedInk} size={16} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`WhatsApp ${name}`}
-            disabled={!hasPhone}
-            onPress={(event) => {
-              event.stopPropagation();
-              void playSelectionHaptic();
-              void handleWhatsApp();
-            }}
-            style={({ pressed }) => [
-              styles.actionButton,
-              !hasPhone && styles.actionButtonDisabled,
-              pressed && hasPhone && styles.actionButtonPressed,
-            ]}
-          >
-            <MessageCircleMore color={hasPhone ? palette.ink : palette.mutedInk} size={16} />
-          </Pressable>
-        </View>
       </View>
-    </>
+
+      <View style={styles.utilityRow}>
+        <Pressable
+          disabled={!hasPhone}
+          onPress={(event) => {
+            event.stopPropagation();
+            void playSelectionHaptic();
+            void handleCall();
+          }}
+          style={({ pressed }) => [styles.ghostAction, pressed && styles.ghostActionPressed]}
+        >
+          <Phone color={hasPhone ? palette.ink : palette.mutedInk} size={18} strokeWidth={2} />
+        </Pressable>
+        <Pressable
+          disabled={!hasPhone}
+          onPress={(event) => {
+            event.stopPropagation();
+            void playSelectionHaptic();
+            void handleWhatsApp();
+          }}
+          style={({ pressed }) => [styles.ghostAction, pressed && styles.ghostActionPressed]}
+        >
+          <MessageCircleMore
+            color={hasPhone ? palette.ink : palette.mutedInk}
+            size={18}
+            strokeWidth={2}
+          />
+        </Pressable>
+        <Pressable
+          disabled={!location}
+          onPress={(event) => {
+            event.stopPropagation();
+            void playSelectionHaptic();
+            void handleMapPin();
+          }}
+          style={({ pressed }) => [styles.ghostAction, pressed && styles.ghostActionPressed]}
+        >
+          <Navigation color={location ? palette.ink : palette.mutedInk} size={18} strokeWidth={2} />
+        </Pressable>
+        <View style={styles.flexSpacer} />
+        <View
+          style={[styles.statusDot, statusTone === "queued" && styles.statusDotQueued]}
+        />
+      </View>
+    </View>
   );
 
   if (!onPress && !onLongPress) {
@@ -208,157 +162,82 @@ export function ShopCard({
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: "#E0DBCF",
-    backgroundColor: palette.card,
-    padding: spacing.sm,
+    borderColor: palette.line,
+    backgroundColor: palette.surface,
     shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
     elevation: 1,
+    overflow: "hidden",
   },
   cardPressed: {
-    transform: [{ scale: 0.99 }],
+    backgroundColor: palette.backgroundMuted,
   },
   cardQueued: {
     borderColor: "#F1B08F",
-    backgroundColor: "#FFF8F2",
+    backgroundColor: "#FFFBF9",
   },
-  media: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.sm,
-    overflow: "hidden",
-    backgroundColor: palette.surfaceStrong,
+  contentWrap: {
+    padding: spacing.md,
+    gap: spacing.sm,
   },
-  image: {
-    width: "100%",
-    height: "100%",
+  mainInfo: {
+    gap: 2,
   },
-  placeholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: palette.accentSoft,
-  },
-  placeholderText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: palette.accentStrong,
-  },
-  copy: {
-    flex: 1,
-    gap: 4,
-  },
-  topRow: {
+  titleRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: spacing.sm,
   },
-  badgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    flexWrap: "wrap",
-  },
   name: {
     flex: 1,
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: "700",
-    color: "#1A1A1A",
+    fontSize: 17,
+    fontWeight: "800",
+    color: palette.ink,
   },
-  meta: {
-    fontSize: 13,
-    color: palette.mutedInk,
-    flex: 1,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  neighborhoodTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: spacing.xs,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: "#F1B08F",
-    backgroundColor: "#FFF8F2",
+  distancePill: {
+    backgroundColor: palette.accentSoft,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
   },
-  neighborhoodTagText: {
-    maxWidth: 180,
-    fontSize: 11,
-    fontWeight: "700",
-    color: palette.accentStrong,
-    letterSpacing: 0.2,
-  },
-  footer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  footerTime: {
-    fontSize: 10,
-    color: palette.mutedInk,
-    fontWeight: "700",
-  },
-  distance: {
+  distanceText: {
     fontSize: 11,
     fontWeight: "800",
     color: palette.accentStrong,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
-  badge: {
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs,
+  subtext: {
+    fontSize: 14,
+    color: palette.mutedInk,
+    fontWeight: "500",
   },
-  badgeLive: {
-    backgroundColor: palette.successSoft,
-  },
-  badgeQueued: {
-    backgroundColor: "#FDE7DA",
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  badgeTextLive: {
-    color: palette.success,
-  },
-  badgeTextQueued: {
-    color: palette.accentStrong,
-  },
-  actionRow: {
+  utilityRow: {
     flexDirection: "row",
-    gap: spacing.md,
-    marginTop: 2,
-  },
-  actionButton: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
     alignItems: "center",
-    justifyContent: "center",
+    gap: spacing.md,
+    marginTop: spacing.xs,
   },
-  actionButtonPressed: {
-    opacity: 0.65,
+  ghostAction: {
+    padding: 2,
   },
-  actionButtonDisabled: {
-    opacity: 0.45,
+  ghostActionPressed: {
+    opacity: 0.5,
+  },
+  flexSpacer: {
+    flex: 1,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: palette.success,
+  },
+  statusDotQueued: {
+    backgroundColor: palette.warning,
   },
 });
