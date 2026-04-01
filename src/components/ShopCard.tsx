@@ -5,7 +5,7 @@ import { buildCloudinaryImageUrl } from "../lib/cloudinary";
 import { openLocationInMaps } from "../lib/maps";
 import { CapturedLocation } from "../types/shops";
 import { playSelectionHaptic } from "../lib/haptics";
-import { palette, radii, shadows, spacing, typography } from "../constants/theme";
+import { palette, radii, spacing, typography } from "../constants/theme";
 
 type ShopCardProps = {
   contactPerson: string;
@@ -210,13 +210,17 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: spacing.md,
-    borderRadius: radii.lg,
+    gap: spacing.sm,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: palette.line,
+    borderColor: "#E0DBCF",
     backgroundColor: palette.card,
-    padding: spacing.md,
-    ...shadows.card,
+    padding: spacing.sm,
+    shadowColor: "#1C1C1E",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
   },
   cardPressed: {
     transform: [{ scale: 0.99 }],
@@ -226,9 +230,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF8F2",
   },
   media: {
-    width: 68,
-    height: 68,
-    borderRadius: radii.md,
+    width: 48,
+    height: 48,
+    borderRadius: radii.sm,
     overflow: "hidden",
     backgroundColor: palette.surfaceStrong,
   },
@@ -243,13 +247,13 @@ const styles = StyleSheet.create({
     backgroundColor: palette.accentSoft,
   },
   placeholderText: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: "700",
     color: palette.accentStrong,
   },
   copy: {
     flex: 1,
-    gap: spacing.xs,
+    gap: 4,
   },
   topRow: {
     flexDirection: "row",
@@ -265,13 +269,13 @@ const styles = StyleSheet.create({
   },
   name: {
     flex: 1,
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: "800",
-    color: palette.ink,
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "700",
+    color: "#1A1A1A",
   },
   meta: {
-    fontSize: typography.label,
+    fontSize: 13,
     color: palette.mutedInk,
     flex: 1,
   },
@@ -289,12 +293,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F1B08F",
     backgroundColor: "#FFF8F2",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   neighborhoodTagText: {
     maxWidth: 180,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     color: palette.accentStrong,
     letterSpacing: 0.2,
@@ -305,7 +309,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   footerTime: {
-    fontSize: typography.overline,
+    fontSize: 10,
     color: palette.mutedInk,
     fontWeight: "700",
   },
@@ -341,21 +345,18 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: "row",
-    gap: spacing.sm,
-    marginTop: spacing.xs,
+    gap: spacing.md,
+    marginTop: 2,
   },
   actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.surface,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
   },
   actionButtonPressed: {
-    backgroundColor: palette.backgroundMuted,
+    opacity: 0.65,
   },
   actionButtonDisabled: {
     opacity: 0.45,

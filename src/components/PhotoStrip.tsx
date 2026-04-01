@@ -16,15 +16,14 @@ export function PhotoStrip({ images, onRemove }: PhotoStripProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.label}>Attached Photos</Text>
-        <Text style={styles.count}>{images.length}</Text>
-      </View>
       <ScrollView
         horizontal
         contentContainerStyle={styles.scrollContent}
         showsHorizontalScrollIndicator={false}
       >
+        <View style={styles.countPill}>
+          <Text style={styles.countText}>{images.length}</Text>
+        </View>
         {images.map((image, index) => (
           <View key={`${image.localUri}-${index}`} style={styles.frame}>
             <Image source={{ uri: image.localUri }} style={styles.image} />
@@ -48,37 +47,29 @@ export function PhotoStrip({ images, onRemove }: PhotoStripProps) {
 
 const styles = StyleSheet.create({
   container: {
-    gap: spacing.sm,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  label: {
-    fontSize: typography.label,
-    fontWeight: "700",
-    color: palette.ink,
-  },
-  count: {
-    minWidth: 28,
-    borderRadius: radii.pill,
-    backgroundColor: palette.accentSoft,
-    color: palette.accentStrong,
-    fontSize: typography.label,
-    fontWeight: "700",
-    overflow: "hidden",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs,
-    textAlign: "center",
+    minHeight: 72,
   },
   scrollContent: {
-    gap: spacing.sm,
+    gap: spacing.xs,
+    alignItems: "center",
+  },
+  countPill: {
+    minWidth: 32,
+    height: 32,
+    borderRadius: radii.pill,
+    backgroundColor: palette.accentSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countText: {
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: palette.accentStrong,
   },
   frame: {
-    width: 104,
-    height: 104,
-    borderRadius: radii.md,
+    width: 68,
+    height: 68,
+    borderRadius: radii.sm,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: palette.line,
@@ -90,10 +81,10 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     position: "absolute",
-    top: spacing.xs,
-    right: spacing.xs,
-    width: 28,
-    height: 28,
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
     borderRadius: radii.pill,
     alignItems: "center",
     justifyContent: "center",

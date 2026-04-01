@@ -1,14 +1,13 @@
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
-import { startTransition, useEffect, useRef, useState } from "react";
+import { forwardRef, startTransition, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Linking,
+  Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,22 +16,26 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Camera,
-  CheckCircle2,
+  Check,
+  ChevronDown,
+  FolderOpen,
   Images,
   MapPinned,
-  Signal,
   SignalHigh,
   SignalZero,
 } from "lucide-react-native";
-import { CaptureField } from "../components/CaptureField";
 import { PhotoStrip } from "../components/PhotoStrip";
-import { PostSaveActionsCard } from "../components/PostSaveActionsCard";
-import { defaultMission } from "../constants/missions";
+import {
+  defaultMission,
+  getCategoryDefinition,
+  getCategoryIdFromLabel,
+  getMissionDefinition,
+  missionCatalog,
+} from "../constants/missions";
 import { palette, radii, spacing, typography } from "../constants/theme";
 import { useCaptureQueue } from "../contexts/CaptureQueueContext";
 import { useMissionControl } from "../contexts/MissionControlContext";
-import { saveLeadToContacts } from "../lib/contacts";
-import { buildWhatsAppLink, formatCoordinates } from "../lib/format";
+import { formatCoordinates } from "../lib/format";
 import {
   playMissionAccomplishedHaptic,
   playPinSuccessHaptic,
@@ -61,9 +64,26 @@ function createEmptyDraft(mission: string, category: string | null): ShopDraft {
   };
 }
 
+function isDraftPristine(draft: ShopDraft) {
+  return (
+    !draft.name &&
+    !draft.phone &&
+    !draft.contactPerson &&
+    !draft.referredBy &&
+    !draft.location &&
+    draft.images.length === 0
+  );
+}
+
 export function CaptureScreen() {
-  const { activeCategoryLabel, activeMissionLabel } = useMissionControl();
-  const { isOnline, lastSyncIssue, pendingCount, saveCapture } = useCaptureQueue();
+  const {
+    activeCategoryId,
+    activeCategoryLabel,
+    activeMissionId,
+    activeMissionLabel,
+    startCategoryMission,
+  } = useMissionControl();
+  const { isOnline, pendingCount, saveCapture } = useCaptureQueue();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<ShopDraft>(() =>
     createEmptyDraft(activeMissionLabel, activeCategoryLabel),
@@ -71,8 +91,9 @@ export function CaptureScreen() {
   const [flashState, setFlashState] = useState<FlashState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPinningLocation, setIsPinningLocation] = useState(false);
-  const [isSavingContact, setIsSavingContact] = useState(false);
-  const [recentLead, setRecentLead] = useState<ShopDraft | null>(null);
+  const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
+  const [pickerMissionId, setPickerMissionId] = useState(activeMissionId);
+  const [showSavedCheck, setShowSavedCheck] = useState(false);
   const phoneRef = useRef<TextInput>(null);
   const contactRef = useRef<TextInput>(null);
   const referredByRef = useRef<TextInput>(null);
@@ -85,28 +106,38 @@ export function CaptureScreen() {
 
     const timeout = setTimeout(() => {
       setFlashState(null);
-    }, 2400);
+    }, 1800);
 
     return () => clearTimeout(timeout);
   }, [flashState]);
 
   useEffect(() => {
-    setDraft((current) => {
-      const isPristine =
-        !current.name &&
-        !current.phone &&
-        !current.contactPerson &&
-        !current.referredBy &&
-        !current.location &&
-        current.images.length === 0;
+    if (!showSavedCheck) {
+      return;
+    }
 
-      if (!isPristine) {
+    const timeout = setTimeout(() => {
+      setShowSavedCheck(false);
+    }, 1400);
+
+    return () => clearTimeout(timeout);
+  }, [showSavedCheck]);
+
+  useEffect(() => {
+    setDraft((current) => {
+      if (!isDraftPristine(current)) {
         return current;
       }
 
       return createEmptyDraft(activeMissionLabel, activeCategoryLabel);
     });
   }, [activeCategoryLabel, activeMissionLabel]);
+
+  useEffect(() => {
+    if (!isFolderPickerOpen) {
+      setPickerMissionId(activeMissionId);
+    }
+  }, [activeMissionId, isFolderPickerOpen]);
 
   function updateField<Key extends keyof ShopDraft>(key: Key, value: ShopDraft[Key]) {
     setDraft((current) => ({
@@ -119,6 +150,26 @@ export function CaptureScreen() {
     setFlashState({ tone, message });
   }
 
+  function openFolderPicker() {
+    const draftMissionId =
+      missionCatalog.find((mission) => mission.label === draft.mission)?.id ?? activeMissionId;
+    setPickerMissionId(draftMissionId);
+    setIsFolderPickerOpen(true);
+  }
+
+  function applyFolderSelection(missionId: string, categoryId: string) {
+    const mission = getMissionDefinition(missionId);
+    const category = getCategoryDefinition(missionId, categoryId);
+
+    setDraft((current) => ({
+      ...current,
+      mission: mission.label,
+      category: category?.label ?? "Unsorted",
+    }));
+    startCategoryMission({ missionId, categoryId });
+    setIsFolderPickerOpen(false);
+  }
+
   async function handlePinLocation() {
     setIsPinningLocation(true);
 
@@ -126,7 +177,7 @@ export function CaptureScreen() {
       const permission = await Location.requestForegroundPermissionsAsync();
 
       if (permission.status !== "granted") {
-        showFlash("error", "Location permission is required to pin this shop.");
+        showFlash("error", "Location permission is required.");
         return;
       }
 
@@ -147,19 +198,17 @@ export function CaptureScreen() {
           }),
       });
 
-      const lockedLocation = {
+      updateField("location", {
         ...coordinates,
         formattedAddress: locationDetails.formattedAddress,
-      };
-
-      updateField("location", lockedLocation);
+      });
       updateField("neighborhood", locationDetails.neighborhood);
       await playPinSuccessHaptic();
-      showFlash("success", "Location locked.");
+      showFlash("success", "Location locked");
     } catch (error) {
       showFlash(
         "error",
-        error instanceof Error ? error.message : "Unable to lock the current location.",
+        error instanceof Error ? error.message : "Unable to lock location.",
       );
     } finally {
       setIsPinningLocation(false);
@@ -170,7 +219,7 @@ export function CaptureScreen() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert("Camera access needed", "Allow camera access to take shop photos.");
+      Alert.alert("Camera access needed", "Allow camera access to take photos.");
       return;
     }
 
@@ -188,7 +237,7 @@ export function CaptureScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert("Photo access needed", "Allow library access to add existing shop photos.");
+      Alert.alert("Photo access needed", "Allow library access to add photos.");
       return;
     }
 
@@ -219,7 +268,7 @@ export function CaptureScreen() {
     }
 
     if (!draft.location) {
-      showFlash("error", "Pin the location before saving.");
+      showFlash("error", "Pin the location first.");
       return;
     }
 
@@ -230,309 +279,356 @@ export function CaptureScreen() {
       const result = await saveCapture(completedDraft);
 
       startTransition(() => {
-        setDraft(createEmptyDraft(activeMissionLabel, activeCategoryLabel));
+        setDraft(createEmptyDraft(completedDraft.mission, completedDraft.category));
       });
 
-      setRecentLead(completedDraft);
       nameRef.current?.focus();
-
+      setShowSavedCheck(true);
       void playMissionAccomplishedHaptic();
 
       showFlash(
-        result.status === "saved"
-          ? "success"
-          : "warning",
-        result.status === "saved" ? "Saved to Convex." : result.reason,
+        result.status === "saved" ? "success" : "warning",
+        result.status === "saved" ? "Lead saved" : result.reason,
       );
     } catch (error) {
-      showFlash(
-        "error",
-        error instanceof Error ? error.message : "Save failed.",
-      );
+      showFlash("error", error instanceof Error ? error.message : "Save failed.");
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleSaveToPhone() {
-    if (!recentLead) {
-      return;
-    }
-
-    setIsSavingContact(true);
-
-    try {
-      await saveLeadToContacts({
-        contactPerson: recentLead.contactPerson,
-        phone: recentLead.phone,
-        shopName: recentLead.name,
-      });
-      showFlash("success", "Contact saved to your phone.");
-      setRecentLead(null);
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to save this contact.";
-      showFlash("warning", message);
-    } finally {
-      setIsSavingContact(false);
-    }
-  }
-
-  async function handleOpenWhatsApp() {
-    if (!recentLead?.phone) {
-      showFlash("warning", "Add a phone number to open WhatsApp.");
-      return;
-    }
-
-    const whatsappLink = buildWhatsAppLink(recentLead.phone);
-
-    if (!whatsappLink) {
-      showFlash("warning", "Phone number format is invalid for WhatsApp.");
-      return;
-    }
-
-    try {
-      await Linking.openURL(whatsappLink);
-    } catch {
-      showFlash("warning", "Unable to open WhatsApp on this device.");
-    }
-  }
-
   const saveDisabled = isSaving || !draft.name.trim() || !draft.location;
+  const selectedCategoryId =
+    getCategoryIdFromLabel(pickerMissionId, draft.category) ??
+    (pickerMissionId === activeMissionId ? activeCategoryId : null);
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 92 : 0}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 96 : 0}
       style={styles.container}
     >
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingBottom: insets.bottom + 220,
-          },
-        ]}
-        keyboardDismissMode="interactive"
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.hero}>
-          <View style={styles.statusRow}>
-            <View style={styles.signalPill}>
-              {isOnline ? (
-                <SignalHigh color={palette.success} size={14} />
-              ) : (
-                <SignalZero color={palette.warning} size={14} />
-              )}
-              <Text style={styles.signalText}>{isOnline ? "Live sync" : "Offline queue"}</Text>
-            </View>
-            <Text style={styles.queueCount}>{pendingCount} queued</Text>
-          </View>
-          <Text style={styles.title}>Rapid Capture</Text>
-          <Text style={styles.subtitle}>
-            Lock the location, add the lead, save, and move to the next shop.
-          </Text>
-        </View>
-
+      <View style={[styles.screen, { paddingBottom: insets.bottom + spacing.sm }]}>
         {flashState ? (
           <View
             style={[
-              styles.flashCard,
-              flashState.tone === "success" && styles.flashSuccess,
-              flashState.tone === "warning" && styles.flashWarning,
-              flashState.tone === "error" && styles.flashError,
+              styles.toast,
+              flashState.tone === "success" && styles.toastSuccess,
+              flashState.tone === "warning" && styles.toastWarning,
+              flashState.tone === "error" && styles.toastError,
             ]}
           >
-            <Text style={styles.flashText}>{flashState.message}</Text>
+            <Text style={styles.toastText}>{flashState.message}</Text>
           </View>
         ) : null}
 
-        {lastSyncIssue ? (
-          <View style={styles.syncCard}>
-            <Signal color={palette.warning} size={16} />
-            <Text style={styles.syncText}>{lastSyncIssue}</Text>
+        <View style={styles.utilityRow}>
+          <View style={styles.utilityPill}>
+            {isOnline ? (
+              <SignalHigh color={palette.success} size={13} />
+            ) : (
+              <SignalZero color={palette.warning} size={13} />
+            )}
+            <Text style={styles.utilityText}>{isOnline ? "Live" : "Queued"}</Text>
           </View>
-        ) : null}
 
-        <View style={styles.folderCard}>
-          <Text style={styles.folderEyebrow}>Active Folder</Text>
-          <Text style={styles.folderTitle}>
-            {draft.mission || defaultMission.label}
-            {" / "}
-            {draft.category || "Unsorted"}
-          </Text>
-          <Text style={styles.folderSubtitle}>
-            New leads from the mission dashboard land here automatically.
-          </Text>
+          <Pressable
+            accessibilityLabel="Choose destination folder"
+            accessibilityRole="button"
+            onPress={() => {
+              void playSelectionHaptic();
+              openFolderPicker();
+            }}
+            style={({ pressed }) => [styles.folderPill, pressed && styles.folderPillPressed]}
+          >
+            <FolderOpen color={palette.ink} size={14} />
+            <Text numberOfLines={1} style={styles.folderPillText}>
+              {draft.category || "Unsorted"}
+            </Text>
+            <ChevronDown color={palette.mutedInk} size={14} />
+          </Pressable>
+
+          <View style={styles.queuePill}>
+            <Text style={styles.queuePillText}>{pendingCount}</Text>
+          </View>
         </View>
 
         <Pressable
+          accessibilityLabel="Pin current location"
           accessibilityRole="button"
-          accessibilityLabel="Pin current shop location"
           onPress={() => void handlePinLocation()}
           style={({ pressed }) => [
-            styles.locationCard,
-            pressed && !isPinningLocation && styles.locationPressed,
+            styles.locationBar,
+            pressed && !isPinningLocation && styles.locationBarPressed,
           ]}
         >
-          <View style={styles.locationIconWrap}>
+          <View style={styles.locationGlyph}>
             {isPinningLocation ? (
-              <ActivityIndicator color={palette.accent} />
+              <ActivityIndicator color={palette.accent} size="small" />
             ) : draft.location ? (
-              <CheckCircle2 color={palette.success} size={20} />
+              <Check color={palette.success} size={16} />
             ) : (
-              <MapPinned color={palette.accent} size={20} />
+              <MapPinned color={palette.accent} size={16} />
             )}
           </View>
           <View style={styles.locationCopy}>
-            <Text style={styles.locationTitle}>
-              {draft.location ? "Location Locked" : "PIN LOCATION"}
+            <Text style={styles.locationPrimary}>
+              {draft.location ? getLocationLabel(draft.location) : "Pin Location"}
             </Text>
-            <Text style={styles.locationSubtitle}>
+            <Text numberOfLines={1} style={styles.locationSecondary}>
               {draft.location
-                ? getLocationLabel(draft.location)
-                : "Fetch precise GPS coordinates. Address lookup is optional and never blocks save."}
+                ? draft.neighborhood || formatCoordinates(draft.location)
+                : draft.category || defaultMission.label}
             </Text>
-            {draft.location ? (
-              <Text style={styles.locationCoordinates}>
-                {formatCoordinates(draft.location)}
-              </Text>
-            ) : null}
-            {draft.neighborhood ? (
-              <Text style={styles.locationNeighborhood}>Neighborhood: {draft.neighborhood}</Text>
-            ) : null}
           </View>
+          {draft.location ? (
+            <Text style={styles.locationMeta}>{formatCoordinates(draft.location)}</Text>
+          ) : null}
         </Pressable>
 
-        <View style={styles.formCard}>
-          <CaptureField
-            autoFocus
-            label="Shop Name"
-            onChangeText={(value) => updateField("name", value)}
-            onSubmitEditing={() => phoneRef.current?.focus()}
-            placeholder="Al Noor Grocery"
-            ref={nameRef}
-            returnKeyType="next"
-            value={draft.name}
-          />
-          <CaptureField
-            keyboardType="phone-pad"
-            label="Phone"
-            onChangeText={(value) => updateField("phone", value)}
-            onSubmitEditing={() => contactRef.current?.focus()}
-            placeholder="+971..."
-            ref={phoneRef}
-            returnKeyType="next"
-            value={draft.phone}
-          />
-          <CaptureField
-            keyboardType="default"
-            label="Contact Person"
-            onChangeText={(value) => updateField("contactPerson", value)}
-            onSubmitEditing={() => referredByRef.current?.focus()}
-            placeholder="Owner or manager"
-            ref={contactRef}
-            returnKeyType="next"
-            value={draft.contactPerson}
-          />
-          <CaptureField
-            keyboardType="default"
-            label="Referred By"
-            onChangeText={(value) => updateField("referredBy", value)}
-            onSubmitEditing={() => {
-              void handleSave();
-            }}
-            placeholder="Who gave you this lead?"
-            ref={referredByRef}
-            returnKeyType="done"
-            value={draft.referredBy}
-          />
-
-          <View style={styles.actionRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Take a shop photo"
-              onPress={() => {
-                void playSelectionHaptic();
-                void requestCameraAndCapture();
-              }}
-              style={styles.mediaButton}
-            >
-              <Camera color={palette.ink} size={20} />
-              <Text style={styles.mediaButtonTitle}>Take Photo</Text>
-              <Text style={styles.mediaButtonHint}>Quick camera capture</Text>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Add existing shop photos"
-              onPress={() => {
-                void playSelectionHaptic();
-                void requestLibraryAndPick();
-              }}
-              style={styles.mediaButton}
-            >
-              <Images color={palette.ink} size={20} />
-              <Text style={styles.mediaButtonTitle}>Add Photos</Text>
-              <Text style={styles.mediaButtonHint}>Multiple images</Text>
-            </Pressable>
+        <View style={styles.formGrid}>
+          <View style={styles.fieldRow}>
+            <CompactField
+              autoFocus
+              containerStyle={styles.fieldHalf}
+              label="Shop"
+              onChangeText={(value) => updateField("name", value)}
+              onSubmitEditing={() => phoneRef.current?.focus()}
+              placeholder="Al Noor Grocery"
+              ref={nameRef}
+              returnKeyType="next"
+              value={draft.name}
+            />
+            <CompactField
+              containerStyle={styles.fieldHalf}
+              keyboardType="phone-pad"
+              label="Phone"
+              onChangeText={(value) => updateField("phone", value)}
+              onSubmitEditing={() => contactRef.current?.focus()}
+              placeholder="+971..."
+              ref={phoneRef}
+              returnKeyType="next"
+              value={draft.phone}
+            />
           </View>
+
+          <View style={styles.fieldRow}>
+            <CompactField
+              containerStyle={styles.fieldHalf}
+              keyboardType="default"
+              label="Contact"
+              onChangeText={(value) => updateField("contactPerson", value)}
+              onSubmitEditing={() => referredByRef.current?.focus()}
+              placeholder="Manager"
+              ref={contactRef}
+              returnKeyType="next"
+              value={draft.contactPerson}
+            />
+            <CompactField
+              containerStyle={styles.fieldHalf}
+              keyboardType="default"
+              label="Referred"
+              onChangeText={(value) => updateField("referredBy", value)}
+              onSubmitEditing={() => {
+                void handleSave();
+              }}
+              placeholder="Source"
+              ref={referredByRef}
+              returnKeyType="done"
+              value={draft.referredBy}
+            />
+          </View>
+        </View>
+
+        <View style={styles.mediaRow}>
+          <UtilityActionButton
+            icon={<Camera color={palette.ink} size={18} />}
+            label="Camera"
+            onPress={() => {
+              void playSelectionHaptic();
+              void requestCameraAndCapture();
+            }}
+          />
+          <UtilityActionButton
+            icon={<Images color={palette.ink} size={18} />}
+            label="Photos"
+            onPress={() => {
+              void playSelectionHaptic();
+              void requestLibraryAndPick();
+            }}
+          />
         </View>
 
         <PhotoStrip images={draft.images} onRemove={removeImage} />
 
-        {recentLead ? (
-          <PostSaveActionsCard
-            disabled={isSavingContact}
-            onDismiss={() => setRecentLead(null)}
-            onSaveToPhone={() => void handleSaveToPhone()}
-            onWhatsApp={() => void handleOpenWhatsApp()}
-            phoneAvailable={Boolean(recentLead.phone.trim())}
-            title={recentLead.name}
-          />
-        ) : null}
-      </ScrollView>
+        <View style={styles.flexSpacer} />
 
-      <View
-        style={[
-          styles.footer,
-          {
-            paddingBottom: insets.bottom + spacing.sm,
-          },
-        ]}
-      >
-        <View style={styles.footerMeta}>
-          <Text style={styles.footerTitle}>
-            {draft.location ? getLocationLabel(draft.location) : "Pin the location before saving"}
-          </Text>
-          <Text style={styles.footerSubtitle}>
-            {isOnline ? "Live sync is ready." : "Offline queue is active."}
-          </Text>
+        <View style={styles.footer}>
+          <View style={styles.footerMeta}>
+            <Text numberOfLines={1} style={styles.footerTitle}>
+              {draft.location ? getLocationLabel(draft.location) : draft.category || "Unsorted"}
+            </Text>
+            <Text style={styles.footerSubtitle}>{draft.mission || defaultMission.label}</Text>
+          </View>
+          <Pressable
+            accessibilityLabel="Save lead"
+            accessibilityRole="button"
+            disabled={saveDisabled}
+            onPress={() => {
+              void playSelectionHaptic();
+              void handleSave();
+            }}
+            style={({ pressed }) => [
+              styles.saveButton,
+              saveDisabled && styles.saveButtonDisabled,
+              pressed && !saveDisabled && styles.saveButtonPressed,
+            ]}
+          >
+            {isSaving ? (
+              <ActivityIndicator color={palette.white} />
+            ) : showSavedCheck ? (
+              <Check color={palette.white} size={18} />
+            ) : (
+              <Text style={styles.saveButtonText}>Save</Text>
+            )}
+          </Pressable>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Save this shop"
-          disabled={saveDisabled}
-          onPress={() => {
-            void playSelectionHaptic();
-            void handleSave();
-          }}
-          style={({ pressed }) => [
-            styles.saveButton,
-            saveDisabled && styles.saveButtonDisabled,
-            pressed && !saveDisabled && styles.saveButtonPressed,
-          ]}
-        >
-          {isSaving ? (
-            <ActivityIndicator color={palette.white} />
-          ) : (
-            <Text style={styles.saveButtonText}>Save Lead</Text>
-          )}
-        </Pressable>
+
+        <FolderPickerSheet
+          activeMissionId={pickerMissionId}
+          onClose={() => setIsFolderPickerOpen(false)}
+          onMissionChange={setPickerMissionId}
+          onSelect={applyFolderSelection}
+          selectedCategoryId={selectedCategoryId}
+          visible={isFolderPickerOpen}
+        />
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+const CompactField = forwardRef<
+  TextInput,
+  React.ComponentProps<typeof TextInput> & {
+    containerStyle?: object;
+    label: string;
+  }
+>(function CompactField({ containerStyle, label, style, ...textInputProps }, ref) {
+  return (
+    <View style={[styles.fieldCard, containerStyle]}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        placeholderTextColor={palette.mutedInk}
+        ref={ref}
+        style={[styles.fieldInput, style]}
+        {...textInputProps}
+      />
+    </View>
+  );
+});
+
+function UtilityActionButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.utilityAction, pressed && styles.utilityActionPressed]}
+    >
+      {icon}
+      <Text style={styles.utilityActionLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function FolderPickerSheet({
+  activeMissionId,
+  onClose,
+  onMissionChange,
+  onSelect,
+  selectedCategoryId,
+  visible,
+}: {
+  activeMissionId: string;
+  onClose: () => void;
+  onMissionChange: (missionId: string) => void;
+  onSelect: (missionId: string, categoryId: string) => void;
+  selectedCategoryId: string | null;
+  visible: boolean;
+}) {
+  const mission = getMissionDefinition(activeMissionId);
+
+  return (
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+      <Pressable
+        onPress={() => {
+          void playSelectionHaptic();
+          onClose();
+        }}
+        style={styles.sheetBackdrop}
+      >
+        <Pressable style={styles.sheetCard} onPress={() => {}}>
+          <Text style={styles.sheetEyebrow}>Folder</Text>
+          <View style={styles.sheetMissionRow}>
+            {missionCatalog.map((option) => (
+              <Pressable
+                key={option.id}
+                onPress={() => {
+                  void playSelectionHaptic();
+                  onMissionChange(option.id);
+                }}
+                style={({ pressed }) => [
+                  styles.sheetMissionChip,
+                  option.id === activeMissionId && styles.sheetMissionChipActive,
+                  pressed && option.id !== activeMissionId && styles.sheetMissionChipPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.sheetMissionChipText,
+                    option.id === activeMissionId && styles.sheetMissionChipTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.sheetCategoryList}>
+            {mission.categories.map((category) => (
+              <Pressable
+                key={category.id}
+                onPress={() => {
+                  void playSelectionHaptic();
+                  onSelect(activeMissionId, category.id);
+                }}
+                style={({ pressed }) => [
+                  styles.sheetCategoryButton,
+                  category.id === selectedCategoryId && styles.sheetCategoryButtonActive,
+                  pressed && category.id !== selectedCategoryId && styles.sheetCategoryButtonPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.sheetCategoryButtonText,
+                    category.id === selectedCategoryId && styles.sheetCategoryButtonTextActive,
+                  ]}
+                >
+                  {category.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -541,136 +637,105 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: palette.background,
   },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    gap: spacing.lg,
-  },
-  hero: {
+  screen: {
+    flex: 1,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
     gap: spacing.sm,
   },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  toast: {
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  signalPill: {
+  toastSuccess: {
+    backgroundColor: palette.successSoft,
+  },
+  toastWarning: {
+    backgroundColor: palette.warningSoft,
+  },
+  toastError: {
+    backgroundColor: palette.dangerSoft,
+  },
+  toastText: {
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: palette.ink,
+  },
+  utilityRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
-    alignSelf: "flex-start",
+  },
+  utilityPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
     borderRadius: radii.pill,
     backgroundColor: palette.syncBadge,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: 7,
   },
-  signalText: {
-    fontSize: typography.overline,
+  utilityText: {
+    fontSize: 12,
     fontWeight: "700",
     color: palette.ink,
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
-  queueCount: {
-    fontSize: typography.overline,
-    fontWeight: "700",
-    color: palette.mutedInk,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  title: {
-    fontSize: 34,
-    lineHeight: 38,
-    fontWeight: "800",
-    color: palette.ink,
-  },
-  subtitle: {
-    fontSize: typography.body,
-    lineHeight: 24,
-    color: palette.mutedInk,
-  },
-  flashCard: {
-    borderRadius: radii.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  flashSuccess: {
-    backgroundColor: palette.successSoft,
-    borderColor: "#CFEBDD",
-  },
-  flashWarning: {
-    backgroundColor: palette.warningSoft,
-    borderColor: "#F7DF9E",
-  },
-  flashError: {
-    backgroundColor: palette.dangerSoft,
-    borderColor: "#F4C7C3",
-  },
-  flashText: {
-    fontSize: typography.label,
-    fontWeight: "700",
-    color: palette.ink,
-  },
-  syncCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: "#F7DF9E",
-    backgroundColor: palette.warningSoft,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  syncText: {
+  folderPill: {
     flex: 1,
-    fontSize: typography.label,
-    lineHeight: 20,
-    color: palette.ink,
-  },
-  folderCard: {
-    gap: spacing.xs,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: "#D8D2C5",
-    backgroundColor: "#1C1C1E",
-    padding: spacing.lg,
-  },
-  folderEyebrow: {
-    fontSize: typography.overline,
-    fontWeight: "700",
-    color: "#CFC7BB",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  folderTitle: {
-    fontSize: typography.title,
-    fontWeight: "800",
-    color: palette.white,
-  },
-  folderSubtitle: {
-    fontSize: typography.label,
-    lineHeight: 20,
-    color: "#E7E0D6",
-  },
-  locationCard: {
+    minHeight: 34,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    borderRadius: radii.lg,
+    gap: spacing.xs,
+    borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: palette.line,
     backgroundColor: palette.surface,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.sm,
   },
-  locationPressed: {
+  folderPillPressed: {
     backgroundColor: palette.backgroundMuted,
   },
-  locationIconWrap: {
-    width: 44,
-    height: 44,
+  folderPillText: {
+    flex: 1,
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: palette.ink,
+  },
+  queuePill: {
+    minWidth: 34,
+    minHeight: 34,
+    borderRadius: radii.pill,
+    backgroundColor: palette.backgroundMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
+  },
+  queuePillText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: palette.ink,
+  },
+  locationBar: {
+    minHeight: 62,
     borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.surface,
+    paddingHorizontal: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  locationBarPressed: {
+    backgroundColor: palette.backgroundMuted,
+  },
+  locationGlyph: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: palette.backgroundMuted,
@@ -679,77 +744,88 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  locationTitle: {
+  locationPrimary: {
     fontSize: typography.label,
-    fontWeight: "800",
-    color: palette.ink,
-    letterSpacing: 0.6,
-  },
-  locationSubtitle: {
-    fontSize: typography.body,
-    lineHeight: 22,
-    color: palette.ink,
-  },
-  locationCoordinates: {
-    marginTop: spacing.xs,
-    fontSize: typography.overline,
-    color: palette.mutedInk,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  locationNeighborhood: {
-    marginTop: spacing.xs,
-    fontSize: typography.overline,
-    color: palette.accentStrong,
     fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    color: palette.ink,
   },
-  formCard: {
-    gap: spacing.md,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.surface,
-    padding: spacing.lg,
+  locationSecondary: {
+    fontSize: 12,
+    color: palette.mutedInk,
   },
-  actionRow: {
+  locationMeta: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: palette.mutedInk,
+  },
+  formGrid: {
+    gap: spacing.xs,
+  },
+  fieldRow: {
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
-  mediaButton: {
+  fieldHalf: {
     flex: 1,
+  },
+  fieldCard: {
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: palette.line,
-    backgroundColor: palette.card,
-    padding: spacing.md,
+    backgroundColor: palette.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    gap: 2,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: palette.mutedInk,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  fieldInput: {
+    minHeight: 28,
+    paddingVertical: 0,
+    fontSize: typography.body,
+    color: palette.ink,
+  },
+  mediaRow: {
+    flexDirection: "row",
     gap: spacing.xs,
   },
-  mediaButtonTitle: {
-    fontSize: typography.label,
+  utilityAction: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  utilityActionPressed: {
+    backgroundColor: palette.backgroundMuted,
+  },
+  utilityActionLabel: {
+    fontSize: 12,
     fontWeight: "700",
     color: palette.ink,
   },
-  mediaButtonHint: {
-    fontSize: typography.overline,
-    color: palette.mutedInk,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+  flexSpacer: {
+    flex: 1,
   },
   footer: {
-    position: "absolute",
-    right: 0,
-    bottom: 0,
-    left: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: palette.line,
-    backgroundColor: palette.surface,
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    gap: spacing.sm,
   },
   footerMeta: {
+    flex: 1,
     gap: 2,
   },
   footerTitle: {
@@ -758,17 +834,17 @@ const styles = StyleSheet.create({
     color: palette.ink,
   },
   footerSubtitle: {
-    fontSize: typography.overline,
+    fontSize: 12,
     color: palette.mutedInk,
-    textTransform: "uppercase",
-    letterSpacing: 1,
   },
   saveButton: {
-    minHeight: 58,
+    minWidth: 108,
+    minHeight: 48,
     borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: palette.accent,
+    paddingHorizontal: spacing.lg,
   },
   saveButtonPressed: {
     backgroundColor: palette.accentStrong,
@@ -780,5 +856,77 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: "800",
     color: palette.white,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(28, 28, 30, 0.32)",
+  },
+  sheetCard: {
+    gap: spacing.md,
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+    backgroundColor: palette.surface,
+    padding: spacing.lg,
+  },
+  sheetEyebrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: palette.mutedInk,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  sheetMissionRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  sheetMissionChip: {
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  sheetMissionChipActive: {
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
+  },
+  sheetMissionChipPressed: {
+    backgroundColor: palette.backgroundMuted,
+  },
+  sheetMissionChipText: {
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: palette.ink,
+  },
+  sheetMissionChipTextActive: {
+    color: palette.white,
+  },
+  sheetCategoryList: {
+    gap: spacing.xs,
+  },
+  sheetCategoryButton: {
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.card,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  sheetCategoryButtonActive: {
+    borderColor: palette.accent,
+    backgroundColor: palette.accentSoft,
+  },
+  sheetCategoryButtonPressed: {
+    backgroundColor: palette.backgroundMuted,
+  },
+  sheetCategoryButtonText: {
+    fontSize: typography.body,
+    fontWeight: "700",
+    color: palette.ink,
+  },
+  sheetCategoryButtonTextActive: {
+    color: palette.accentStrong,
   },
 });

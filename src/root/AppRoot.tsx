@@ -1,9 +1,15 @@
+import { ReactNode } from "react";
 import { NavigationContainer, Theme as NavigationTheme } from "@react-navigation/native";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import {
+  BottomTabBarProps,
+  createBottomTabNavigator,
+} from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { FolderOpen, Map, Plus } from "lucide-react-native";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette } from "../constants/theme";
+import { useMissionControl } from "../contexts/MissionControlContext";
 import { playSelectionHaptic } from "../lib/haptics";
 import { HomeTabParamList, RootStackParamList } from "../navigation/types";
 import { CaptureScreen } from "../screens/CaptureScreen";
@@ -44,31 +50,118 @@ const navigationTheme: NavigationTheme = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator<HomeTabParamList>();
 
-function CaptureTabButton({
-  accessibilityState,
+function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const { setActiveCategoryId } = useMissionControl();
+  const missionsRoute = state.routes.find((route) => route.name === "Missions");
+  const captureRoute = state.routes.find((route) => route.name === "Capture");
+  const mapRoute = state.routes.find((route) => route.name === "Map");
+
+  if (!missionsRoute || !captureRoute || !mapRoute) {
+    return null;
+  }
+
+  return (
+    <View style={[styles.tabBarShell, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <View style={styles.tabBarSurface}>
+        <CommandTabButton
+          focused={state.index === state.routes.findIndex((route) => route.key === missionsRoute.key)}
+          icon={<FolderOpen color={state.index === state.routes.findIndex((route) => route.key === missionsRoute.key) ? palette.ink : palette.mutedInk} size={20} />}
+          label="Missions"
+          onPress={() => {
+            setActiveCategoryId(null);
+            handleTabPress({ navigation, route: missionsRoute, state });
+          }}
+        />
+        <View style={styles.captureSlot} />
+        <CommandTabButton
+          focused={state.index === state.routes.findIndex((route) => route.key === mapRoute.key)}
+          icon={<Map color={state.index === state.routes.findIndex((route) => route.key === mapRoute.key) ? palette.ink : palette.mutedInk} size={20} />}
+          label="Map"
+          onPress={() => handleTabPress({ navigation, route: mapRoute, state })}
+        />
+      </View>
+
+      <CaptureTabButton
+        focused={state.index === state.routes.findIndex((route) => route.key === captureRoute.key)}
+        onPress={() => handleTabPress({ navigation, route: captureRoute, state })}
+      />
+    </View>
+  );
+}
+
+function handleTabPress({
+  navigation,
+  route,
+  state,
+}: {
+  navigation: BottomTabBarProps["navigation"];
+  route: BottomTabBarProps["state"]["routes"][number];
+  state: BottomTabBarProps["state"];
+}) {
+  const event = navigation.emit({
+    canPreventDefault: true,
+    target: route.key,
+    type: "tabPress",
+  });
+
+  if (!event.defaultPrevented) {
+    navigation.navigate(route.name, route.params);
+  }
+}
+
+function CommandTabButton({
+  focused,
+  icon,
+  label,
   onPress,
 }: {
-  accessibilityState?: { selected?: boolean };
-  onPress?: (...args: any[]) => void;
+  focused: boolean;
+  icon: ReactNode;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: focused }}
+      onPress={() => {
+        void playSelectionHaptic();
+        onPress();
+      }}
+      style={({ pressed }) => [styles.sideTabButton, pressed && styles.sideTabButtonPressed]}
+    >
+      {icon}
+      <Text style={[styles.sideTabLabel, focused && styles.sideTabLabelActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function CaptureTabButton({
+  focused,
+  onPress,
+}: {
+  focused: boolean;
+  onPress: () => void;
 }) {
   return (
     <View style={styles.captureTabWrap}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Open capture"
-        onPress={(event) => {
+        accessibilityState={{ selected: focused }}
+        onPress={() => {
           void playSelectionHaptic();
-          onPress?.(event);
+          onPress();
         }}
         style={({ pressed }) => [
           styles.captureTabButton,
-          accessibilityState?.selected && styles.captureTabButtonActive,
+          focused && styles.captureTabButtonActive,
           pressed && styles.captureTabButtonPressed,
         ]}
       >
         <Plus color={palette.white} size={24} />
       </Pressable>
-      <Text style={styles.captureTabLabel}>Capture</Text>
     </View>
   );
 }
@@ -76,7 +169,8 @@ function CaptureTabButton({
 function HomeTabs() {
   return (
     <Tabs.Navigator
-      screenOptions={({ route }) => ({
+      tabBar={(props) => <CommandTabBar {...props} />}
+      screenOptions={{
         headerShadowVisible: false,
         headerStyle: {
           backgroundColor: palette.background,
@@ -86,46 +180,18 @@ function HomeTabs() {
           fontWeight: "700",
         },
         headerTintColor: palette.ink,
-        tabBarActiveTintColor: palette.ink,
-        tabBarInactiveTintColor: palette.mutedInk,
+        headerTitleAlign: "center",
         tabBarHideOnKeyboard: true,
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "700",
-          marginTop: 2,
-        },
-        tabBarItemStyle: {
-          flex: 1,
-        },
-        tabBarStyle: {
-          backgroundColor: palette.surface,
-          borderTopColor: palette.line,
-          height: 84,
-          paddingTop: 10,
-          paddingBottom: 12,
-        },
-        tabBarIcon: ({ color, size }) => {
-          if (route.name === "Missions") {
-            return <FolderOpen color={color} size={size} />;
-          }
-
-          if (route.name === "Map") {
-            return <Map color={color} size={size} />;
-          }
-
-          return <Plus color={color} size={size} />;
-        },
         sceneStyle: {
           backgroundColor: palette.background,
         },
-      })}
+      }}
     >
       <Tabs.Screen
         component={ShopsListScreen}
         name="Missions"
         options={{
-          title: "Missions",
-          headerShown: false,
+          headerTitle: () => <MissionsHeaderTitle />,
         }}
       />
       <Tabs.Screen
@@ -134,7 +200,6 @@ function HomeTabs() {
         options={{
           title: "Capture",
           headerTitle: "Rapid Capture",
-          tabBarButton: (props) => <CaptureTabButton {...props} />,
         }}
       />
       <Tabs.Screen
@@ -149,30 +214,81 @@ function HomeTabs() {
   );
 }
 
+function MissionsHeaderTitle() {
+  const { activeCategoryLabel } = useMissionControl();
+
+  return (
+    <Text numberOfLines={1} style={styles.headerTitle}>
+      {activeCategoryLabel ? `Missions / ${activeCategoryLabel}` : "Missions"}
+    </Text>
+  );
+}
+
 const styles = StyleSheet.create({
-  captureTabWrap: {
-    flex: 1,
+  tabBarShell: {
+    backgroundColor: palette.white,
+    borderTopColor: "#E0DBCF",
+    borderTopWidth: 1,
+    paddingHorizontal: 18,
+    paddingTop: 6,
+  },
+  tabBarSurface: {
+    minHeight: 64,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start",
-    marginTop: -26,
-    width: "100%",
+    justifyContent: "space-between",
+  },
+  sideTabButton: {
+    flex: 1,
+    minHeight: 56,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  sideTabButtonPressed: {
+    opacity: 0.8,
+  },
+  sideTabLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: palette.mutedInk,
+  },
+  sideTabLabelActive: {
+    color: palette.ink,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: palette.ink,
+  },
+  captureSlot: {
+    width: 96,
+  },
+  captureTabWrap: {
+    position: "absolute",
+    left: "50%",
+    bottom: 10,
+    marginLeft: -30,
+    width: 60,
+    alignItems: "center",
+    justifyContent: "center",
   },
   captureTabButton: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: palette.accent,
     alignItems: "center",
     justifyContent: "center",
     ...(Platform.OS === "web"
       ? {
-          boxShadow: "0px 14px 22px rgba(28, 28, 30, 0.22)",
+          boxShadow: "0px 10px 18px rgba(28, 28, 30, 0.18)",
         }
       : {
           shadowColor: "#1C1C1E",
-          shadowOffset: { width: 0, height: 14 },
-          shadowOpacity: 0.22,
-          shadowRadius: 20,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.18,
+          shadowRadius: 14,
           elevation: 8,
         }),
   },
@@ -181,12 +297,6 @@ const styles = StyleSheet.create({
   },
   captureTabButtonPressed: {
     backgroundColor: palette.accentStrong,
-  },
-  captureTabLabel: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: "700",
-    color: palette.ink,
   },
 });
 

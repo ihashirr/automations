@@ -153,6 +153,7 @@ export function MapScreen() {
       >
         {pins.map((pin) => (
           <Marker
+            anchor={{ x: 0.5, y: 0.5 }}
             coordinate={{
               latitude: pin.location.lat,
               longitude: pin.location.lng,
@@ -162,24 +163,21 @@ export function MapScreen() {
               void playSelectionHaptic();
               setSelectedLead(pin);
             }}
-            pinColor={palette.accent}
             title={pin.name}
-          />
+          >
+            <View style={[styles.dotMarker, pin.status === "queued" && styles.dotMarkerQueued]} />
+          </Marker>
         ))}
       </MapView>
 
-      <View style={[styles.topOverlay, { paddingTop: insets.top + spacing.sm }]}>
-        <View style={styles.missionBanner}>
-          <Text style={styles.missionLabel}>Active Mission</Text>
-          <Text style={styles.missionValue}>
-            {activeCategoryLabel ?? "No Folder Locked"}
-          </Text>
-          <Text style={styles.missionContext}>
+      <View style={[styles.topOverlay, { paddingTop: spacing.sm }]}>
+        <View style={styles.missionBar}>
+          <Text numberOfLines={1} style={styles.missionBarText}>
             {activeMissionLabel || defaultMission.label}
           </Text>
-          <View style={styles.missionMetaRow}>
-            <Target color={palette.accent} size={14} />
-            <Text style={styles.missionMetaText}>{pins.length} leads on the board</Text>
+          <View style={styles.statsPill}>
+            <Target color={palette.accentStrong} size={12} />
+            <Text style={styles.statsPillText}>{pins.length}</Text>
           </View>
         </View>
 
@@ -272,40 +270,42 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: spacing.lg,
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: spacing.xs,
     alignItems: "flex-start",
   },
-  missionBanner: {
+  missionBar: {
     flex: 1,
-    borderRadius: radii.lg,
-    backgroundColor: "rgba(28, 28, 30, 0.92)",
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  missionLabel: {
-    fontSize: typography.overline,
-    fontWeight: "700",
-    color: "#CFC7BB",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  missionValue: {
-    fontSize: typography.title,
-    fontWeight: "800",
-    color: palette.white,
-  },
-  missionContext: {
-    fontSize: typography.label,
-    color: "#E7E0D6",
-  },
-  missionMetaRow: {
+    minHeight: 40,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(255, 255, 255, 0.86)",
+    paddingHorizontal: spacing.md,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "rgba(224, 219, 207, 0.9)",
   },
-  missionMetaText: {
-    fontSize: typography.label,
-    color: "#E7E0D6",
+  missionBarText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: palette.ink,
+  },
+  statsPill: {
+    minWidth: 44,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: palette.accentSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 4,
+    paddingHorizontal: 8,
+  },
+  statsPillText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: palette.accentStrong,
   },
   locateButton: {
     width: 48,
@@ -317,6 +317,17 @@ const styles = StyleSheet.create({
   },
   locateButtonPressed: {
     backgroundColor: "rgba(243, 238, 227, 0.98)",
+  },
+  dotMarker: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: palette.accent,
+    borderWidth: 2,
+    borderColor: palette.white,
+  },
+  dotMarkerQueued: {
+    backgroundColor: "#F09A6B",
   },
   actionCard: {
     position: "absolute",

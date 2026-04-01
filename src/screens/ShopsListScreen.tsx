@@ -1,6 +1,10 @@
 import * as Location from "expo-location";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
-import { CompositeNavigationProp, useNavigation } from "@react-navigation/native";
+import {
+  CompositeNavigationProp,
+  useFocusEffect,
+  useNavigation,
+} from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -17,9 +21,10 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react-native";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
   Modal,
   Platform,
@@ -31,7 +36,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../convex/_generated/api";
 import { ShopCard } from "../components/ShopCard";
 import {
@@ -64,7 +68,6 @@ const categoryIcons = {
 
 export function ShopsListScreen() {
   const navigation = useNavigation<DashboardNavigation>();
-  const insets = useSafeAreaInsets();
   const moveShop = useMutation(api.shops.moveShop);
   const {
     activeCategoryId,
@@ -104,6 +107,38 @@ export function ShopsListScreen() {
       void refreshCurrentLocation();
     }
   }, [currentLocation, isLocating, sortMode]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (selectedLead) {
+          setSelectedLead(null);
+          return true;
+        }
+
+        if (searchText) {
+          setSearchText("");
+          return true;
+        }
+
+        if (activeNeighborhood) {
+          setActiveNeighborhood(null);
+          return true;
+        }
+
+        if (activeCategoryId) {
+          setActiveCategoryId(null);
+          return true;
+        }
+
+        return false;
+      });
+
+      return () => {
+        subscription.remove();
+      };
+    }, [activeCategoryId, activeNeighborhood, searchText, selectedLead, setActiveCategoryId]),
+  );
 
   async function refreshCurrentLocation() {
     setIsLocating(true);
@@ -264,10 +299,14 @@ export function ShopsListScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[
+          styles.content,
+          activeCategoryLabel ? styles.contentCompact : null,
+          { paddingTop: spacing.md, paddingBottom: spacing.xxl + 120 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
+        <View style={[styles.hero, activeCategoryLabel && styles.heroCompact]}>
           {activeCategoryLabel ? (
             <>
               <View style={styles.breadcrumbHeader}>
@@ -300,17 +339,15 @@ export function ShopsListScreen() {
                   </View>
                 </View>
               </View>
-              <Text style={styles.heroSubtitle}>
-                One-thumb folder view for {activeMissionLabel}. Dive in, act, and back out fast.
+              <Text style={[styles.heroSubtitle, styles.heroSubtitleCompact]}>
+                {activeMissionLabel}
               </Text>
             </>
           ) : (
             <>
               <Text style={styles.eyebrow}>Strategic Mission Dashboard</Text>
               <Text style={styles.heroTitle}>{activeMissionLabel}</Text>
-              <Text style={styles.heroSubtitle}>
-                Open a folder and start capturing territory.
-              </Text>
+              <Text style={styles.heroSubtitle}>{activeMissionLabel}</Text>
               <View style={styles.heroTag}>
                 <Target color={palette.accent} size={14} />
                 <Text style={styles.heroTagText}>Folder View</Text>
@@ -399,53 +436,55 @@ export function ShopsListScreen() {
               <Text style={styles.sectionTitle}>{activeCategoryLabel}</Text>
               <Text style={styles.sectionMeta}>{rows.length} leads</Text>
             </View>
-            <View style={styles.searchRow}>
-              <View style={styles.searchBox}>
-                <Search color={palette.mutedInk} size={18} />
-                <TextInput
-                  onChangeText={setSearchText}
-                  placeholder="Search current folder"
-                  placeholderTextColor={palette.mutedInk}
-                  style={styles.searchInput}
-                  value={searchText}
-                />
+            <View style={styles.controlStack}>
+              <View style={styles.searchRow}>
+                <View style={styles.searchBox}>
+                  <Search color={palette.mutedInk} size={18} />
+                  <TextInput
+                    onChangeText={setSearchText}
+                    placeholder="Search current folder"
+                    placeholderTextColor={palette.mutedInk}
+                    style={styles.searchInput}
+                    value={searchText}
+                  />
+                </View>
+                <Pressable
+                  onPress={() => {
+                    void playSelectionHaptic();
+                    void flushQueue();
+                  }}
+                  style={styles.refreshButton}
+                >
+                  <RefreshCcw color={palette.ink} size={18} />
+                </Pressable>
               </View>
-              <Pressable
-                onPress={() => {
-                  void playSelectionHaptic();
-                  void flushQueue();
-                }}
-                style={styles.refreshButton}
-              >
-                <RefreshCcw color={palette.ink} size={18} />
-              </Pressable>
-            </View>
-            <View style={styles.toolbar}>
-              <View style={styles.segmentedControl}>
-                <Segment active={sortMode === "latest"} label="Latest Saved" onPress={() => setSortMode("latest")} />
-                <Segment active={sortMode === "nearest"} label="Nearest To Me" onPress={() => setSortMode("nearest")} />
+              <View style={styles.toolbar}>
+                <View style={styles.segmentedControl}>
+                  <Segment active={sortMode === "latest"} label="Latest Saved" onPress={() => setSortMode("latest")} />
+                  <Segment active={sortMode === "nearest"} label="Nearest To Me" onPress={() => setSortMode("nearest")} />
+                </View>
+                <Pressable
+                  onPress={() => {
+                    void playSelectionHaptic();
+                    void refreshCurrentLocation();
+                  }}
+                  style={styles.locateButton}
+                >
+                  <LocateFixed color={palette.ink} size={16} />
+                </Pressable>
               </View>
-              <Pressable
-                onPress={() => {
-                  void playSelectionHaptic();
-                  void refreshCurrentLocation();
-                }}
-                style={styles.locateButton}
-              >
-                <LocateFixed color={palette.ink} size={16} />
-              </Pressable>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                <AreaChip active={activeNeighborhood === null} label="All Areas" onPress={() => setActiveNeighborhood(null)} />
+                {neighborhoods.map((neighborhood) => (
+                  <AreaChip
+                    key={neighborhood}
+                    active={activeNeighborhood === neighborhood}
+                    label={neighborhood}
+                    onPress={() => setActiveNeighborhood(neighborhood)}
+                  />
+                ))}
+              </ScrollView>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-              <AreaChip active={activeNeighborhood === null} label="All Areas" onPress={() => setActiveNeighborhood(null)} />
-              {neighborhoods.map((neighborhood) => (
-                <AreaChip
-                  key={neighborhood}
-                  active={activeNeighborhood === neighborhood}
-                  label={neighborhood}
-                  onPress={() => setActiveNeighborhood(neighborhood)}
-                />
-              ))}
-            </ScrollView>
             <FlatList
               contentContainerStyle={styles.listContent}
               data={rows}
@@ -622,10 +661,13 @@ function getRowPhone(row: LeadTarget) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.background },
   content: { gap: spacing.lg },
+  contentCompact: { gap: spacing.md },
   hero: { gap: spacing.md, backgroundColor: "#161719", paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, paddingTop: spacing.lg },
+  heroCompact: { gap: spacing.sm, paddingBottom: spacing.md, paddingTop: spacing.md },
   eyebrow: { fontSize: typography.overline, fontWeight: "700", color: "#B4AC9F", letterSpacing: 1.2, textTransform: "uppercase" },
   heroTitle: { fontSize: 32, lineHeight: 36, fontWeight: "800", color: palette.white },
   heroSubtitle: { fontSize: typography.body, lineHeight: 22, color: "#E6DFD4" },
+  heroSubtitleCompact: { fontSize: typography.label, lineHeight: 20, color: "#D8D0C2" },
   breadcrumbHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   breadcrumbBackButton: {
     width: 40,
@@ -656,6 +698,7 @@ const styles = StyleSheet.create({
   syncText: { flex: 1, fontSize: typography.label, fontWeight: "700", color: palette.ink },
   syncMeta: { fontSize: typography.overline, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
   section: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  controlStack: { gap: spacing.sm },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
   sectionTitle: { fontSize: typography.title, fontWeight: "800", color: palette.ink },
   sectionMeta: { fontSize: typography.overline, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
@@ -666,26 +709,26 @@ const styles = StyleSheet.create({
   folderName: { fontSize: typography.title, fontWeight: "800", color: palette.ink },
   folderCount: { fontSize: typography.label, color: palette.mutedInk },
   searchRow: { flexDirection: "row", gap: spacing.sm },
-  searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, minHeight: 52, paddingHorizontal: spacing.md },
+  searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, minHeight: 48, paddingHorizontal: spacing.md },
   searchInput: { flex: 1, fontSize: typography.body, color: palette.ink },
-  refreshButton: { width: 52, height: 52, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, alignItems: "center", justifyContent: "center" },
+  refreshButton: { width: 48, height: 48, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, alignItems: "center", justifyContent: "center" },
   toolbar: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   segmentedControl: { flex: 1, flexDirection: "row", borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, padding: 4 },
-  segment: { flex: 1, minHeight: 40, borderRadius: radii.sm, alignItems: "center", justifyContent: "center" },
+  segment: { flex: 1, minHeight: 36, borderRadius: radii.sm, alignItems: "center", justifyContent: "center" },
   segmentActive: { backgroundColor: palette.accent },
   segmentPressed: { backgroundColor: palette.backgroundMuted },
   segmentText: { fontSize: typography.overline, fontWeight: "800", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 0.8 },
   segmentTextActive: { color: palette.white },
-  locateButton: { width: 44, height: 44, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, alignItems: "center", justifyContent: "center" },
-  chipRow: { gap: spacing.sm, paddingRight: spacing.lg },
-  areaChip: { borderRadius: radii.pill, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  locateButton: { width: 40, height: 40, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, alignItems: "center", justifyContent: "center" },
+  chipRow: { gap: spacing.xs, paddingRight: spacing.lg },
+  areaChip: { borderRadius: radii.pill, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, paddingHorizontal: spacing.sm, paddingVertical: 7 },
   areaChipPrimary: { borderColor: "#232529", backgroundColor: "#232529" },
   areaChipActive: { borderColor: palette.accent, backgroundColor: palette.accent },
   areaChipPressed: { backgroundColor: palette.backgroundMuted },
   areaChipText: { fontSize: typography.label, fontWeight: "700", color: palette.ink },
   areaChipTextPrimary: { color: palette.white },
   areaChipTextActive: { color: palette.white },
-  listContent: { paddingBottom: spacing.xxl },
+  listContent: { paddingBottom: spacing.xl },
   separator: { height: spacing.sm },
   centerState: { alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl },
   centerText: { textAlign: "center", fontSize: typography.label, lineHeight: 22, color: palette.mutedInk },
