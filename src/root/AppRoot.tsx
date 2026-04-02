@@ -79,7 +79,12 @@ function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
             }
           }}
         />
-        <View style={styles.captureSlot} />
+        <View style={styles.captureSlot}>
+          <CaptureTabButton
+            focused={state.index === state.routes.findIndex((route) => route.key === captureRoute.key)}
+            onPress={() => handleTabPress({ navigation, route: captureRoute, state })}
+          />
+        </View>
         <CommandTabButton
           focused={state.index === state.routes.findIndex((route) => route.key === mapRoute.key)}
           icon={<Map color={state.index === state.routes.findIndex((route) => route.key === mapRoute.key) ? palette.ink : palette.mutedInk} size={20} />}
@@ -87,11 +92,6 @@ function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
           onPress={() => handleTabPress({ navigation, route: mapRoute, state })}
         />
       </View>
-
-      <CaptureTabButton
-        focused={state.index === state.routes.findIndex((route) => route.key === captureRoute.key)}
-        onPress={() => handleTabPress({ navigation, route: captureRoute, state })}
-      />
     </View>
   );
 }
@@ -303,14 +303,11 @@ const styles = StyleSheet.create({
     color: palette.ink,
   },
   captureSlot: {
-    width: 96,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   captureTabWrap: {
-    position: "absolute",
-    left: "50%",
-    bottom: 10,
-    marginLeft: -30,
-    width: 60,
     alignItems: "center",
     justifyContent: "center",
   },
