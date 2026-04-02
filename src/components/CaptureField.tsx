@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import { StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
 import { palette, radii, spacing, typography } from "../constants/theme";
 
@@ -7,16 +7,26 @@ type CaptureFieldProps = TextInputProps & {
 };
 
 export const CaptureField = forwardRef<TextInput, CaptureFieldProps>(function CaptureField(
-  { label, style, ...textInputProps },
+  { label, onBlur, onFocus, style, ...textInputProps },
   ref,
 ) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
         ref={ref}
+        onBlur={(event) => {
+          setIsFocused(false);
+          onBlur?.(event);
+        }}
+        onFocus={(event) => {
+          setIsFocused(true);
+          onFocus?.(event);
+        }}
         placeholderTextColor={palette.mutedInk}
-        style={[styles.input, style]}
+        style={[styles.input, isFocused && styles.inputFocused, style]}
         {...textInputProps}
       />
     </View>
@@ -44,5 +54,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     fontSize: typography.body,
     color: palette.ink,
+  },
+  inputFocused: {
+    borderColor: "#3B82F6",
   },
 });

@@ -29,9 +29,11 @@ import {
   SignalZero,
   Trash2,
 } from "lucide-react-native";
+import { AppBottomSheet } from "../components/AppBottomSheet";
+import { AppTip } from "../components/AppTip";
 import { CaptureMapPicker } from "../components/CaptureMapPicker";
 import { getMissionDefinition, missionCatalog } from "../constants/missions";
-import { palette, radii, spacing, typography } from "../constants/theme";
+import { palette, radii, shadows, spacing, typography } from "../constants/theme";
 import { useCaptureQueue } from "../contexts/CaptureQueueContext";
 import { useMissionControl } from "../contexts/MissionControlContext";
 import { formatCoordinates } from "../lib/format";
@@ -46,19 +48,21 @@ type Coordinates = { lat: number; lng: number };
 const DEFAULT_MAP_COORDINATES: Coordinates = { lat: 24.4539, lng: 54.3773 };
 
 const COLORS = {
-  bg: "#090A0C",
-  card: "#161719",
-  text: "#FFFFFF",
-  textMuted: "#8E8E93",
-  border: "rgba(255,255,255,0.08)",
-  inputBg: "rgba(255,255,255,0.04)",
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
+  text: "#111827",
+  textMuted: "#6B7280",
+  border: "#E5E7EB",
+  inputBg: "#F9FAFB",
   accent: palette.accent,
   accentStrong: palette.accentStrong,
   success: "#1f8a5b",
-  successSoft: "rgba(31, 138, 91, 0.2)",
+  successSoft: "#E8F6EF",
   warning: "#a16207",
-  warningSoft: "rgba(161, 98, 7, 0.2)",
+  warningSoft: "#FFF3D6",
   danger: palette.danger,
+  dangerSoft: "#FDEDEC",
+  panel: "#FFF7F2",
 };
 
 function createEmptyDraft(mission: string, category: string | null): ShopDraft {
@@ -102,6 +106,7 @@ export function CaptureScreen() {
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
   const [mapCoordinates, setMapCoordinates] = useState<Coordinates | null>(null);
   const [pickerMissionId, setPickerMissionId] = useState(activeMissionId);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
   const phoneRef = useRef<TextInput>(null);
   const contactRef = useRef<TextInput>(null);
   const referredByRef = useRef<TextInput>(null);
@@ -283,15 +288,32 @@ export function CaptureScreen() {
               )}
             </View>
             <Text style={styles.heroTitle}>Fast Lead Capture</Text>
-            <Pressable onPress={() => { void playSelectionHaptic(); openFolderPicker(); }} style={({ pressed }) => [styles.folderPill, pressed && styles.pressedOpacity]}>
-              <Text style={styles.folderLabel}>Saving into:</Text>
-              <Text style={styles.folderValue}>{draft.mission} / {draft.category || "Unsorted"}</Text>
-              <ChevronDown color={COLORS.textMuted} size={14} />
+            <Pressable onPress={() => { void playSelectionHaptic(); openFolderPicker(); }} style={({ pressed }) => [styles.destinationCard, pressed && styles.pressedDestinationCard]}>
+              <View style={styles.destinationIcon}>
+                <FolderOpen color={COLORS.accentStrong} size={18} />
+              </View>
+              <View style={styles.destinationCopy}>
+                <Text style={styles.destinationLabel}>Saving Into</Text>
+                <Text style={styles.destinationValue}>{draft.mission}</Text>
+                <Text style={styles.destinationMeta}>{draft.category || "Unsorted"} folder</Text>
+              </View>
+              <View style={styles.destinationAction}>
+                <Text style={styles.destinationActionText}>Change</Text>
+                <ChevronDown color={COLORS.accentStrong} size={14} />
+              </View>
             </Pressable>
+            <AppTip
+              message="Choose the module and folder before saving so new leads land in the right queue immediately."
+              title="Save Destination"
+            />
           </View>
 
           <View style={styles.card}>
             <Text style={styles.eyebrow}>Images</Text>
+            <AppTip
+              message="Capture a quick storefront shot first. It becomes the visual reference for this lead across the app."
+              tone="info"
+            />
             {draft.images.length === 0 ? (
               <Pressable onPress={() => { void playSelectionHaptic(); void requestCameraAndCapture(); }} style={({ pressed }) => [styles.captureAreaSmall, pressed && styles.pressedBg]}>
                 <Camera color={COLORS.text} size={28} />
@@ -326,48 +348,56 @@ export function CaptureScreen() {
                 autoFocus
                 blurOnSubmit={false}
                 onChangeText={(value) => updateField("name", value)}
+                onBlur={() => setFocusedField(null)}
+                onFocus={() => setFocusedField("name")}
                 onSubmitEditing={() => phoneRef.current?.focus()}
                 placeholder="Shop Name"
                 placeholderTextColor={COLORS.textMuted}
                 ref={nameRef}
                 returnKeyType="next"
-                style={styles.inputLarge}
+                style={[styles.inputLarge, focusedField === "name" && styles.inputFocused]}
                 value={draft.name}
               />
               <View style={styles.actionRowTight}>
                 <TextInput
                   keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
                   onChangeText={(value) => updateField("phone", value)}
+                  onBlur={() => setFocusedField(null)}
+                  onFocus={() => setFocusedField("phone")}
                   onSubmitEditing={() => contactRef.current?.focus()}
                   placeholder="Phone"
                   placeholderTextColor={COLORS.textMuted}
                   ref={phoneRef}
                   returnKeyType="next"
                   textContentType="telephoneNumber"
-                  style={[styles.inputDense, styles.flex]}
+                  style={[styles.inputDense, styles.flex, focusedField === "phone" && styles.inputFocused]}
                   value={draft.phone}
                 />
                 <TextInput
                   autoCapitalize="words"
                   onChangeText={(value) => updateField("contactPerson", value)}
+                  onBlur={() => setFocusedField(null)}
+                  onFocus={() => setFocusedField("contactPerson")}
                   onSubmitEditing={() => referredByRef.current?.focus()}
                   placeholder="Manager"
                   placeholderTextColor={COLORS.textMuted}
                   ref={contactRef}
                   returnKeyType="next"
-                  style={[styles.inputDense, styles.flex]}
+                  style={[styles.inputDense, styles.flex, focusedField === "contactPerson" && styles.inputFocused]}
                   value={draft.contactPerson}
                 />
               </View>
               <TextInput
                 autoCapitalize="words"
                 onChangeText={(value) => updateField("referredBy", value)}
+                onBlur={() => setFocusedField(null)}
+                onFocus={() => setFocusedField("referredBy")}
                 onSubmitEditing={() => Keyboard.dismiss()}
                 placeholder="Referred By"
                 placeholderTextColor={COLORS.textMuted}
                 ref={referredByRef}
                 returnKeyType="done"
-                style={styles.inputDense}
+                style={[styles.inputDense, focusedField === "referredBy" && styles.inputFocused]}
                 value={draft.referredBy}
               />
             </View>
@@ -382,6 +412,10 @@ export function CaptureScreen() {
                 </Text>
               </View>
             </View>
+            <AppTip
+              message="Use current GPS for speed, or open the map when you need to place the lead precisely."
+              tone="info"
+            />
             
             {draft.location ? (
               <View style={styles.locationFoundBlock}>
@@ -395,7 +429,10 @@ export function CaptureScreen() {
               </View>
             ) : (
               <>
-                <Text style={styles.emptyLocationText}>No location set</Text>
+                <View style={styles.emptyLocationRow}>
+                  <MapPinned color={COLORS.textMuted} size={16} />
+                  <Text style={styles.emptyLocationText}>Location not set</Text>
+                </View>
                 <View style={styles.actionRow}>
                   <PrimaryAction label="Use Current Location" icon={<Navigation size={16} color={COLORS.text} />} onPress={() => void handleUseCurrentLocation()} disabled={isResolvingLocation || isPreparingMap} />
                   <SecondaryAction label="Choose on Map" icon={<MapPinned size={16} color={COLORS.text} />} onPress={() => void handleOpenMapPicker()} disabled={isResolvingLocation || isPreparingMap} />
@@ -407,9 +444,11 @@ export function CaptureScreen() {
               <TextInput
                 autoCapitalize="words"
                 onChangeText={(value) => updateField("neighborhood", value)}
+                onBlur={() => setFocusedField(null)}
+                onFocus={() => setFocusedField("neighborhood")}
                 placeholder="Area/Landmark (Optional)"
                 placeholderTextColor={COLORS.textMuted}
-                style={[styles.inputDense, { marginTop: spacing.md }]}
+                style={[styles.inputDense, { marginTop: spacing.md }, focusedField === "neighborhood" && styles.inputFocused]}
                 value={draft.neighborhood}
               />
             )}
@@ -505,39 +544,109 @@ function FolderPickerSheet({
   const missionCategories = getCategoriesForMission(activeMissionId);
 
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <Pressable onPress={() => { void playSelectionHaptic(); onClose(); }} style={styles.sheetBackdrop}>
-        <Pressable style={styles.sheetCard} onPress={() => {}}>
-          <Text style={styles.sheetLabel}>Folder</Text>
-          <View style={styles.actionRowTight}>
-            <TextInput
-              onChangeText={setNewFolderName}
-              placeholder="Create new folder"
-              placeholderTextColor={COLORS.textMuted}
-              style={styles.sheetInput}
-              value={newFolderName}
-            />
-            <Pressable onPress={() => { void playSelectionHaptic(); const created = onCreateCategory({ label: newFolderName, missionId: activeMissionId }); if(created){ setNewFolderName(""); onSelect(activeMissionId, created.id); } }} style={({ pressed }) => [styles.sheetAdd, !newFolderName.trim() && styles.actionDisabled, pressed && newFolderName.trim() && styles.pressedOpacity]}>
-              <Text style={styles.sheetAddText}>Add</Text>
+    <AppBottomSheet
+      description="Select the operational module and folder before you save. This same modal pattern is used for lead management flows."
+      onClose={onClose}
+      title="Save Destination"
+      visible={visible}
+    >
+      <AppTip
+        message="Your active destination controls where the lead appears in list views and mission folders right after save."
+        tone="info"
+      />
+
+      <View style={styles.sheetMissionSection}>
+        <Text style={styles.sheetSectionLabel}>Module</Text>
+        <View style={styles.sheetChipRow}>
+          {missionCatalog.map((option) => (
+            <Pressable
+              key={option.id}
+              onPress={() => {
+                void playSelectionHaptic();
+                onMissionChange(option.id);
+              }}
+              style={({ pressed }) => [
+                styles.destinationChip,
+                option.id === activeMissionId && styles.destinationChipActive,
+                pressed && option.id !== activeMissionId && styles.pressedOpacity,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.destinationChipText,
+                  option.id === activeMissionId && styles.destinationChipTextActive,
+                ]}
+              >
+                {option.label}
+              </Text>
             </Pressable>
-          </View>
-          <View style={styles.actionRowTight}>
-            {missionCatalog.map((option) => (
-              <Pressable key={option.id} onPress={() => { void playSelectionHaptic(); onMissionChange(option.id); }} style={({ pressed }) => [styles.chip, option.id === activeMissionId && styles.chipActive, pressed && option.id !== activeMissionId && styles.pressedOpacity]}>
-                <Text style={[styles.chipText, option.id === activeMissionId && styles.chipTextActive]}>{option.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <View style={styles.sheetList}>
-            {missionCategories.map((category) => (
-              <Pressable key={category.id} onPress={() => { void playSelectionHaptic(); onSelect(activeMissionId, category.id); }} style={({ pressed }) => [styles.sheetItem, category.id === selectedCategoryId && styles.sheetItemActive, pressed && category.id !== selectedCategoryId && styles.pressedOpacity]}>
-                <Text style={[styles.sheetItemText, category.id === selectedCategoryId && styles.sheetItemTextActive]}>{category.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.sheetCreatePanel}>
+        <View style={styles.sheetCreateHeader}>
+          <Text style={styles.sheetSectionLabel}>Create Folder</Text>
+          <Text style={styles.sheetCreateHint}>Custom folders stay inside the selected module.</Text>
+        </View>
+        <View style={styles.actionRowTight}>
+          <TextInput
+            onChangeText={setNewFolderName}
+            placeholder="New folder name"
+            placeholderTextColor={COLORS.textMuted}
+            style={styles.sheetInput}
+            value={newFolderName}
+          />
+          <Pressable
+            onPress={() => {
+              void playSelectionHaptic();
+              const created = onCreateCategory({ label: newFolderName, missionId: activeMissionId });
+              if (created) {
+                setNewFolderName("");
+                onSelect(activeMissionId, created.id);
+              }
+            }}
+            style={({ pressed }) => [
+              styles.sheetAdd,
+              !newFolderName.trim() && styles.actionDisabled,
+              pressed && newFolderName.trim() && styles.pressedOpacity,
+            ]}
+          >
+            <Text style={styles.sheetAddText}>Add</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.sheetCategorySection}>
+        <Text style={styles.sheetSectionLabel}>Folder</Text>
+        <View style={styles.sheetList}>
+          {missionCategories.map((category) => (
+            <Pressable
+              key={category.id}
+              onPress={() => {
+                void playSelectionHaptic();
+                onSelect(activeMissionId, category.id);
+              }}
+              style={({ pressed }) => [
+                styles.sheetItem,
+                category.id === selectedCategoryId && styles.sheetItemActive,
+                pressed && category.id !== selectedCategoryId && styles.pressedOpacity,
+              ]}
+            >
+              <View style={styles.sheetItemCopy}>
+                <Text style={[styles.sheetItemText, category.id === selectedCategoryId && styles.sheetItemTextActive]}>
+                  {category.label}
+                </Text>
+                <Text style={styles.sheetItemMeta}>
+                  {category.id === selectedCategoryId ? "Current destination" : "Tap to save into this folder"}
+                </Text>
+              </View>
+              {category.id === selectedCategoryId ? <Text style={styles.sheetItemBadge}>Selected</Text> : null}
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </AppBottomSheet>
   );
 }
 
@@ -550,16 +659,82 @@ const styles = StyleSheet.create({
   actionRowTight: { flexDirection: "row", gap: spacing.xs },
   content: { gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.md },
   
-  header: { gap: spacing.sm, paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
+  header: {
+    gap: spacing.sm,
+    paddingBottom: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.panel,
+    ...shadows.card,
+  },
   badgeLine: { flexDirection: "row", alignItems: "center", gap: 4 },
   badgeText: { fontSize: typography.overline, fontWeight: "800", color: COLORS.text, textTransform: "uppercase" },
   badgeCount: { fontSize: typography.overline, fontWeight: "800", color: COLORS.warning, textTransform: "uppercase" },
   heroTitle: { fontSize: 28, fontWeight: "900", color: COLORS.text },
-  folderPill: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, backgroundColor: COLORS.inputBg, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radii.pill },
-  folderLabel: { fontSize: typography.label, color: COLORS.textMuted },
-  folderValue: { fontSize: typography.label, fontWeight: "700", color: COLORS.text },
+  destinationCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    padding: spacing.md,
+  },
+  pressedDestinationCard: {
+    backgroundColor: COLORS.inputBg,
+  },
+  destinationIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.panel,
+  },
+  destinationCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  destinationLabel: {
+    fontSize: typography.overline,
+    fontWeight: "800",
+    color: COLORS.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  destinationValue: {
+    fontSize: typography.body,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+  destinationMeta: {
+    fontSize: typography.label,
+    color: COLORS.textMuted,
+  },
+  destinationAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  destinationActionText: {
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: COLORS.accentStrong,
+  },
 
-  card: { gap: spacing.md, borderRadius: radii.md, backgroundColor: COLORS.card, padding: spacing.md },
+  card: {
+    gap: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: spacing.md,
+    ...shadows.card,
+  },
   cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   eyebrow: { fontSize: typography.overline, fontWeight: "800", color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1 },
   
@@ -570,13 +745,14 @@ const styles = StyleSheet.create({
   thumbnailAddTile: { width: 70, height: 70, borderRadius: radii.sm, borderWidth: 1, borderColor: COLORS.border, borderStyle: "dashed", alignItems: "center", justifyContent: "center", backgroundColor: COLORS.inputBg },
   thumbnailFrame: { width: 70, height: 70, borderRadius: radii.sm, overflow: "hidden", backgroundColor: COLORS.border },
   thumbnailImage: { width: "100%", height: "100%" },
-  thumbnailRemove: { position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.text, alignItems: "center", justifyContent: "center" },
+  thumbnailRemove: { position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center" },
   ghostActionRow: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
   ghostActionText: { fontSize: typography.label, fontWeight: "600", color: COLORS.textMuted },
 
   inputsBlock: { gap: 10 },
-  inputLarge: { height: 54, fontSize: 22, fontWeight: "800", color: COLORS.text, borderBottomWidth: 1, borderColor: COLORS.border },
-  inputDense: { height: 44, fontSize: typography.body, fontWeight: "600", color: COLORS.text, borderBottomWidth: 1, borderColor: COLORS.border },
+  inputLarge: { height: 56, fontSize: 24, fontWeight: "800", color: COLORS.text, borderBottomWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
+  inputDense: { height: 46, fontSize: typography.body, fontWeight: "600", color: COLORS.text, borderBottomWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
+  inputFocused: { borderColor: "#3B82F6" },
 
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.pill },
   statusPending: { backgroundColor: COLORS.warningSoft },
@@ -585,23 +761,42 @@ const styles = StyleSheet.create({
   statusPendingText: { color: COLORS.warning },
   statusConfirmedText: { color: COLORS.success },
 
-  emptyLocationText: { fontSize: typography.body, color: COLORS.textMuted, fontStyle: "italic" },
-  locationFoundBlock: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.inputBg, padding: spacing.sm, borderRadius: radii.sm },
+  emptyLocationRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  emptyLocationText: { fontSize: typography.body, color: COLORS.textMuted, fontWeight: "600" },
+  locationFoundBlock: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border, padding: spacing.sm, borderRadius: radii.sm },
   locationAreaName: { fontSize: typography.body, fontWeight: "800", color: COLORS.text },
   locationSecondary: { fontSize: typography.label, color: COLORS.textMuted, marginTop: 2 },
-  changeBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: COLORS.border, borderRadius: radii.pill },
+  changeBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: radii.pill },
   changeBtnText: { fontSize: typography.label, fontWeight: "700", color: COLORS.text },
 
-  saveBar: { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.card, paddingHorizontal: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: COLORS.border },
+  saveBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: COLORS.card,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    shadowColor: "#111827",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 6,
+  },
   saveStatus: { fontSize: typography.body, fontWeight: "700", color: COLORS.textMuted },
   saveStatusReady: { color: COLORS.success },
   saveButton: { minWidth: 120, height: 48, borderRadius: radii.sm, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, backgroundColor: COLORS.accent },
-  saveButtonDisabled: { backgroundColor: COLORS.border },
-  saveButtonText: { fontSize: typography.body, fontWeight: "800", color: COLORS.text },
+  saveButtonDisabled: { backgroundColor: "#D1D5DB" },
+  saveButtonText: { fontSize: typography.body, fontWeight: "800", color: palette.white },
 
   primaryAction: { flex: 1, height: 48, borderRadius: radii.sm, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: COLORS.accent },
-  primaryActionText: { fontSize: typography.label, fontWeight: "800", color: COLORS.text },
-  secondaryAction: { flex: 1, height: 48, borderRadius: radii.sm, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: COLORS.border, backgroundColor: "transparent" },
+  primaryActionText: { fontSize: typography.label, fontWeight: "800", color: palette.white },
+  secondaryAction: { flex: 1, height: 48, borderRadius: radii.sm, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
   secondaryActionText: { fontSize: typography.label, fontWeight: "700", color: COLORS.text },
 
   actionDisabled: { opacity: 0.5 },
@@ -611,22 +806,93 @@ const styles = StyleSheet.create({
   toast: { position: "absolute", left: spacing.lg, right: spacing.lg, borderRadius: radii.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   toastSuccess: { backgroundColor: COLORS.successSoft },
   toastWarning: { backgroundColor: COLORS.warningSoft },
-  toastError: { backgroundColor: "#3a0b08" },
+  toastError: { backgroundColor: COLORS.dangerSoft },
   toastText: { fontSize: typography.label, fontWeight: "700", color: COLORS.text, textAlign: "center" },
 
-  sheetBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.7)" },
-  sheetCard: { backgroundColor: COLORS.card, borderTopLeftRadius: radii.md, borderTopRightRadius: radii.md, padding: spacing.lg, gap: spacing.md, maxHeight: "80%" },
-  sheetLabel: { fontSize: typography.overline, fontWeight: "800", color: COLORS.textMuted, textTransform: "uppercase" },
+  sheetMissionSection: {
+    gap: spacing.sm,
+  },
+  sheetCategorySection: {
+    gap: spacing.sm,
+  },
+  sheetSectionLabel: {
+    fontSize: typography.overline,
+    fontWeight: "800",
+    color: COLORS.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  sheetChipRow: {
+    flexDirection: "row",
+    gap: spacing.xs,
+  },
+  destinationChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 9,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  destinationChipActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: "#FFF3EC",
+  },
+  destinationChipText: {
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: COLORS.textMuted,
+  },
+  destinationChipTextActive: {
+    color: COLORS.accentStrong,
+  },
+  sheetCreatePanel: {
+    gap: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
+    padding: spacing.md,
+  },
+  sheetCreateHeader: {
+    gap: 2,
+  },
+  sheetCreateHint: {
+    fontSize: typography.label,
+    color: COLORS.textMuted,
+  },
   sheetInput: { flex: 1, backgroundColor: COLORS.inputBg, borderRadius: radii.sm, paddingHorizontal: spacing.md, height: 44, fontSize: typography.body, color: COLORS.text },
-  sheetAdd: { minWidth: 80, borderRadius: radii.sm, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.accent },
+  sheetAdd: { minWidth: 80, borderRadius: radii.sm, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border },
   sheetAddText: { color: COLORS.text, fontWeight: "700" },
-  chip: { paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radii.pill, borderWidth: 1, borderColor: COLORS.border },
-  chipActive: { backgroundColor: COLORS.inputBg, borderColor: COLORS.border },
-  chipText: { fontSize: 13, fontWeight: "700", color: COLORS.textMuted },
-  chipTextActive: { color: COLORS.text },
   sheetList: { gap: 4 },
-  sheetItem: { paddingVertical: spacing.md, paddingHorizontal: spacing.sm, borderRadius: radii.sm },
-  sheetItemActive: { backgroundColor: COLORS.inputBg },
+  sheetItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  sheetItemActive: { backgroundColor: "#FFF3EC", borderColor: COLORS.accent },
+  sheetItemCopy: {
+    flex: 1,
+    gap: 2,
+  },
   sheetItemText: { fontSize: typography.body, fontWeight: "600", color: COLORS.text },
   sheetItemTextActive: { color: COLORS.text, fontWeight: "700" },
+  sheetItemMeta: {
+    fontSize: typography.label,
+    color: COLORS.textMuted,
+  },
+  sheetItemBadge: {
+    fontSize: typography.overline,
+    fontWeight: "800",
+    color: COLORS.accentStrong,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
 });

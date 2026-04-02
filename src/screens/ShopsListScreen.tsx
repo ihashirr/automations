@@ -26,7 +26,6 @@ import {
   ActivityIndicator,
   BackHandler,
   FlatList,
-  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -37,6 +36,8 @@ import {
   View,
 } from "react-native";
 import { api } from "../../convex/_generated/api";
+import { AppBottomSheet } from "../components/AppBottomSheet";
+import { AppTip } from "../components/AppTip";
 import { ShopCard } from "../components/ShopCard";
 import {
   getMissionDefinition,
@@ -573,60 +574,57 @@ function MoveSheet({
   const categories = getMissionCategories(activeMissionId);
 
   return (
-    <Modal animationType="slide" transparent visible={selectedLead !== null} onRequestClose={onClose}>
+    <AppBottomSheet
+      description="Move the selected lead into another folder or module without leaving the list."
+      onClose={onClose}
+      title={selectedLead ? getRowName(selectedLead) : "Lead"}
+      visible={selectedLead !== null}
+    >
+      <AppTip
+        message="This uses the same modal pattern as capture destination selection, so the move flow stays predictable."
+        tone="info"
+      />
+      <Text style={styles.sheetSectionTitle}>Move To Folder</Text>
+      {categories.map((category) => (
+        <Pressable
+          key={category.id}
+          onPress={() => {
+            void playSelectionHaptic();
+            void onMove(mission.label, category.label);
+          }}
+          style={styles.sheetButton}
+        >
+          <Text style={styles.sheetButtonText}>{category.label}</Text>
+        </Pressable>
+      ))}
+      <Text style={styles.sheetSectionTitle}>Change Mission</Text>
+      {missionCatalog.map((missionOption) => (
+        <Pressable
+          key={missionOption.id}
+          onPress={() => {
+            void playSelectionHaptic();
+            const missionOptionCategories = getMissionCategories(missionOption.id);
+            const fallback =
+              missionOptionCategories.find((category) => category.id === "unsorted")?.label ??
+              missionOptionCategories[0]?.label ??
+              "Unsorted";
+            void onMove(missionOption.label, fallback);
+          }}
+          style={styles.sheetButton}
+        >
+          <Text style={styles.sheetButtonText}>{missionOption.label}</Text>
+        </Pressable>
+      ))}
       <Pressable
-        style={styles.sheetBackdrop}
         onPress={() => {
           void playSelectionHaptic();
           onClose();
         }}
+        style={styles.sheetClose}
       >
-        <Pressable style={styles.sheetCard} onPress={() => {}}>
-          <Text style={styles.sheetEyebrow}>Move Lead</Text>
-          <Text style={styles.sheetTitle}>{selectedLead ? getRowName(selectedLead) : "Lead"}</Text>
-          <Text style={styles.sheetSectionTitle}>Move To Folder</Text>
-          {categories.map((category) => (
-            <Pressable
-              key={category.id}
-              onPress={() => {
-                void playSelectionHaptic();
-                void onMove(mission.label, category.label);
-              }}
-              style={styles.sheetButton}
-            >
-              <Text style={styles.sheetButtonText}>{category.label}</Text>
-            </Pressable>
-          ))}
-          <Text style={styles.sheetSectionTitle}>Change Mission</Text>
-          {missionCatalog.map((missionOption) => (
-            <Pressable
-              key={missionOption.id}
-              onPress={() => {
-                void playSelectionHaptic();
-                const missionOptionCategories = getMissionCategories(missionOption.id);
-                const fallback =
-                  missionOptionCategories.find((category) => category.id === "unsorted")?.label ??
-                  missionOptionCategories[0]?.label ??
-                  "Unsorted";
-                void onMove(missionOption.label, fallback);
-              }}
-              style={styles.sheetButton}
-            >
-              <Text style={styles.sheetButtonText}>{missionOption.label}</Text>
-            </Pressable>
-          ))}
-          <Pressable
-            onPress={() => {
-              void playSelectionHaptic();
-              onClose();
-            }}
-            style={styles.sheetClose}
-          >
-            <Text style={styles.sheetCloseText}>Close</Text>
-          </Pressable>
-        </Pressable>
+        <Text style={styles.sheetCloseText}>Close</Text>
       </Pressable>
-    </Modal>
+    </AppBottomSheet>
   );
 }
 
@@ -736,10 +734,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: palette.white,
   },
-  sheetBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(28, 28, 30, 0.32)" },
-  sheetCard: { gap: spacing.sm, borderTopLeftRadius: radii.lg, borderTopRightRadius: radii.lg, backgroundColor: palette.surface, padding: spacing.lg },
-  sheetEyebrow: { fontSize: typography.overline, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
-  sheetTitle: { fontSize: typography.title, fontWeight: "800", color: palette.ink },
   sheetSectionTitle: { marginTop: spacing.sm, fontSize: typography.overline, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
   sheetButton: { borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.card, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   sheetButtonText: { fontSize: typography.body, fontWeight: "700", color: palette.ink },
