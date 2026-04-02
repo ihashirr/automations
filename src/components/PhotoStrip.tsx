@@ -16,14 +16,17 @@ export function PhotoStrip({ images, onRemove }: PhotoStripProps) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.headerRow}>
+        <Text style={styles.label}>Review Images</Text>
+        <View style={styles.countPill}>
+          <Text style={styles.countText}>{images.length}</Text>
+        </View>
+      </View>
       <ScrollView
         horizontal
         contentContainerStyle={styles.scrollContent}
         showsHorizontalScrollIndicator={false}
       >
-        <View style={styles.countPill}>
-          <Text style={styles.countText}>{images.length}</Text>
-        </View>
         {images.map((image, index) => (
           <View key={`${image.localUri}-${index}`} style={styles.frame}>
             <Image source={{ uri: image.localUri }} style={styles.image} />
@@ -47,15 +50,27 @@ export function PhotoStrip({ images, onRemove }: PhotoStripProps) {
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: 72,
+    gap: spacing.sm,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  label: {
+    fontSize: typography.overline,
+    fontWeight: "800",
+    color: palette.mutedInk,
+    letterSpacing: 1,
+    textTransform: "uppercase",
   },
   scrollContent: {
     gap: spacing.xs,
-    alignItems: "center",
+    paddingRight: spacing.xs,
   },
   countPill: {
-    minWidth: 32,
-    height: 32,
+    minWidth: 34,
+    height: 34,
     borderRadius: radii.pill,
     backgroundColor: palette.accentSoft,
     alignItems: "center",
@@ -67,13 +82,13 @@ const styles = StyleSheet.create({
     color: palette.accentStrong,
   },
   frame: {
-    width: 68,
-    height: 68,
-    borderRadius: radii.sm,
+    width: 78,
+    height: 78,
+    borderRadius: radii.md,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: palette.line,
-    backgroundColor: palette.surfaceStrong,
+    backgroundColor: palette.surface,
   },
   image: {
     width: "100%",
