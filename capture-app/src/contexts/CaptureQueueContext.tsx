@@ -41,6 +41,7 @@ function normalizeDraft(draft: ShopDraft): ShopDraft {
     phone: sanitizePhoneInput(draft.phone),
     contactPerson: normalizeText(draft.contactPerson),
     referredBy: normalizeText(draft.referredBy),
+    outcome: draft.outcome,
     location: draft.location
       ? {
           ...draft.location,
@@ -98,6 +99,9 @@ export function CaptureQueueProvider({ children }: { children: ReactNode }) {
     if (!draft.location) {
       throw new Error("Pin the shop location before saving.");
     }
+    if (!draft.outcome) {
+      throw new Error("Select the visit outcome before saving.");
+    }
 
     const imageUrls =
       draft.images.length > 0 ? await uploadImages(draft.images) : [];
@@ -110,6 +114,7 @@ export function CaptureQueueProvider({ children }: { children: ReactNode }) {
       phone: draft.phone,
       contactPerson: draft.contactPerson,
       referredBy: draft.referredBy,
+      outcome: draft.outcome,
       images: imageUrls,
       location: draft.location,
     });
@@ -203,6 +208,9 @@ export function CaptureQueueProvider({ children }: { children: ReactNode }) {
 
     if (!normalizedDraft.location) {
       throw new Error("Pin the shop location before saving.");
+    }
+    if (!normalizedDraft.outcome) {
+      throw new Error("Select the visit outcome before saving.");
     }
 
     if (!isOnline) {

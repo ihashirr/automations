@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import { defaultMission } from "../constants/missions";
+import { isVisitOutcome } from "../constants/visit-outcomes";
 import { getFileExtension } from "./images";
 import { PendingCapture, ShopDraft } from "../types/shops";
 
@@ -36,6 +37,10 @@ export async function loadPendingCaptures() {
       category: capture.category?.trim() || "Unsorted",
       mission: capture.mission?.trim() || defaultMission.label,
       neighborhood: capture.neighborhood?.trim() || "",
+      outcome:
+        typeof capture.outcome === "string" && isVisitOutcome(capture.outcome)
+          ? capture.outcome
+          : null,
     }));
   } catch {
     return [];

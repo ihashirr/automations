@@ -1,4 +1,5 @@
 import { Id } from "../../convex/_generated/dataModel";
+import { VisitOutcome, VisitOutcomeValue } from "../constants/visit-outcomes";
 
 export type DraftImage = {
   localUri: string;
@@ -22,6 +23,7 @@ export type ShopDraft = {
   phone: string;
   contactPerson: string;
   referredBy: string;
+  outcome: VisitOutcome | null;
   images: DraftImage[];
   location: CapturedLocation | null;
 };
@@ -41,6 +43,7 @@ export type ShopSummary = {
   phone: string;
   contactPerson: string;
   referredBy: string;
+  outcome: VisitOutcomeValue;
   images: string[];
   previewImageUrl: string | null;
   location: CapturedLocation | null;
@@ -58,8 +61,21 @@ export type ShopDetail = {
   phone: string;
   contactPerson: string;
   referredBy: string;
+  outcome: VisitOutcomeValue;
   images: string[];
   location: CapturedLocation | null;
   createdAt: number;
   updatedAt: number;
+};
+
+export type DuplicateCandidate = {
+  id: string;
+  category: string;
+  mission: string;
+  name: string;
+  neighborhood: string;
+  phone: string;
+  outcome: VisitOutcomeValue;
+  createdAt: number;
+  source: "live" | "queued";
 };

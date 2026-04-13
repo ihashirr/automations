@@ -1,5 +1,6 @@
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { MessageCircleMore, Navigation, Phone } from "lucide-react-native";
+import { getVisitOutcomeLabel, VisitOutcomeValue } from "../constants/visit-outcomes";
 import { buildDialLink, buildWhatsAppLink, formatCaptureTime, getInitials } from "../lib/format";
 import { buildCloudinaryImageUrl } from "../lib/cloudinary";
 import { openLocationInMaps } from "../lib/maps";
@@ -17,6 +18,7 @@ type ShopCardProps = {
   phone: string;
   previewImageUrl: string | null;
   neighborhood?: string | null;
+  outcome: VisitOutcomeValue;
   statusLabel: string;
   statusTone: "live" | "queued";
   onPress?: () => void;
@@ -30,6 +32,7 @@ export function ShopCard({
   name,
   onLongPress,
   onPress,
+  outcome,
   phone,
   previewImageUrl,
   neighborhood,
@@ -85,6 +88,12 @@ export function ShopCard({
         <Text numberOfLines={1} style={styles.subtext}>
           {contactPerson || "No Manager"} • {neighborhoodLabel}
         </Text>
+        <View style={styles.metaRow}>
+          <View style={styles.outcomePill}>
+            <Text style={styles.outcomeText}>{getVisitOutcomeLabel(outcome)}</Text>
+          </View>
+          <Text style={styles.timestamp}>{formatCaptureTime(createdAt)}</Text>
+        </View>
       </View>
 
       <View style={styles.utilityRow}>
@@ -215,6 +224,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: palette.mutedInk,
     fontWeight: "500",
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    marginTop: spacing.xxs,
+  },
+  outcomePill: {
+    borderRadius: radii.pill,
+    backgroundColor: palette.accentSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  outcomeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: palette.accentStrong,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  timestamp: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: palette.mutedInk,
   },
   utilityRow: {
     flexDirection: "row",

@@ -229,6 +229,7 @@ function MissionsStack() {
 function HomeTabs() {
   return (
     <Tabs.Navigator
+      initialRouteName="Capture"
       tabBar={(props) => <CommandTabBar {...props} />}
       screenOptions={{
         headerShown: false,

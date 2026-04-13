@@ -10,6 +10,10 @@ export default defineSchema({
     phone: v.string(),
     contactPerson: v.string(),
     referredBy: v.string(),
+    outcome: v.optional(v.string()),
+    normalizedName: v.optional(v.string()),
+    normalizedNeighborhood: v.optional(v.string()),
+    normalizedPhone: v.optional(v.string()),
     // Current: Cloudinary URLs.
     // Legacy: Convex storage ids from the original implementation.
     images: v.union(v.array(v.string()), v.array(v.id("_storage"))),
@@ -31,5 +35,7 @@ export default defineSchema({
     .index("by_createdAt", ["createdAt"])
     .index("by_category_and_createdAt", ["category", "createdAt"])
     .index("by_mission_and_createdAt", ["mission", "createdAt"])
-    .index("by_neighborhood_and_createdAt", ["neighborhood", "createdAt"]),
+    .index("by_neighborhood_and_createdAt", ["neighborhood", "createdAt"])
+    .index("by_normalized_phone", ["normalizedPhone"])
+    .index("by_normalized_name_and_normalized_neighborhood", ["normalizedName", "normalizedNeighborhood"]),
 });

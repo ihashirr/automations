@@ -4,6 +4,7 @@ import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "r
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { MapPin, MessageCircleMore, Phone } from "lucide-react-native";
 import { api } from "../../convex/_generated/api";
+import { getVisitOutcomeLabel } from "../constants/visit-outcomes";
 import { palette, radii, spacing, typography } from "../constants/theme";
 import { buildCloudinaryImageUrl } from "../lib/cloudinary";
 import {
@@ -69,6 +70,9 @@ export function ShopDetailScreen({ navigation, route }: Props) {
           <Text style={styles.meta}>
             {shop.referredBy ? `Referred by ${shop.referredBy}` : "Direct capture"}
           </Text>
+          <View style={styles.outcomePill}>
+            <Text style={styles.outcomePillText}>{getVisitOutcomeLabel(shop.outcome)}</Text>
+          </View>
           <Text style={styles.timestamp}>Captured {formatCaptureTime(shop.createdAt)}</Text>
         </View>
       </View>
@@ -173,6 +177,10 @@ export function ShopDetailScreen({ navigation, route }: Props) {
             <Text style={styles.detailValue}>{shop.category}</Text>
           </View>
           <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Outcome</Text>
+            <Text style={styles.detailValue}>{getVisitOutcomeLabel(shop.outcome)}</Text>
+          </View>
+          <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Neighborhood</Text>
             <Text style={styles.detailValue}>{shop.neighborhood || "Unknown"}</Text>
           </View>
@@ -261,6 +269,21 @@ const styles = StyleSheet.create({
     fontSize: typography.overline,
     fontWeight: "700",
     color: palette.mutedInk,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  outcomePill: {
+    alignSelf: "flex-start",
+    marginTop: spacing.xs,
+    borderRadius: radii.pill,
+    backgroundColor: palette.accentSoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  outcomePillText: {
+    fontSize: typography.overline,
+    fontWeight: "800",
+    color: palette.accentStrong,
     textTransform: "uppercase",
     letterSpacing: 1,
   },

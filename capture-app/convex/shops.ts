@@ -2,6 +2,7 @@ import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { action, internalMutation, mutation, query, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { isVisitOutcome, VisitOutcomeValue } from "../src/constants/visit-outcomes";
 
 const DEFAULT_MISSION = "SME";
 const DEFAULT_CATEGORY = "Unsorted";
@@ -35,6 +36,10 @@ function normalizePhone(value: string) {
   return value.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
 }
 
+function normalizeIndexText(value: string) {
+  return normalizeText(value).toLowerCase();
+}
+
 function normalizeMission(value: string | undefined) {
   return normalizeText(value ?? "") || DEFAULT_MISSION;
 }
@@ -47,6 +52,14 @@ function normalizeNeighborhood(value: string | undefined) {
   return normalizeText(value ?? "");
 }
 
+function normalizeOutcome(value: string) {
+  if (!isVisitOutcome(value)) {
+    throw new Error("Visit outcome is invalid.");
+  }
+
+  return value;
+}
+
 function buildSearchText(fields: {
   category: string;
   formattedAddress: string;
@@ -56,6 +69,7 @@ function buildSearchText(fields: {
   phone: string;
   contactPerson: string;
   referredBy: string;
+  outcome: string;
 }) {
   return [
     fields.mission,
@@ -64,6 +78,7 @@ function buildSearchText(fields: {
     fields.phone,
     fields.contactPerson,
     fields.referredBy,
+    fields.outcome,
     fields.formattedAddress,
     fields.neighborhood,
   ]
@@ -112,6 +127,10 @@ function resolveMission(shop: Doc<"shops">) {
 
 function resolveCategory(shop: Doc<"shops">) {
   return normalizeCategory(shop.category);
+}
+
+function resolveOutcome(shop: Doc<"shops">): VisitOutcomeValue {
+  return shop.outcome && isVisitOutcome(shop.outcome) ? shop.outcome : "unknown";
 }
 
 function isCoordinateLabel(value: string) {
@@ -223,6 +242,7 @@ function toSearchTextInput(shop: {
   phone: string;
   contactPerson: string;
   referredBy: string;
+  outcome: string;
   formattedAddress: string;
 }) {
   return buildSearchText(shop);
@@ -243,6 +263,7 @@ async function toShopSummary(ctx: QueryCtx, shop: Doc<"shops">) {
     phone: shop.phone,
     contactPerson: shop.contactPerson,
     referredBy: shop.referredBy,
+    outcome: resolveOutcome(shop),
     images,
     previewImageUrl: images[0] ?? null,
     location,
@@ -260,6 +281,7 @@ export const createShopRecord = internalMutation({
     phone: v.string(),
     contactPerson: v.string(),
     referredBy: v.string(),
+    outcome: v.string(),
     images: v.array(v.string()),
     location: v.object({
       lat: v.number(),
@@ -274,9 +296,13 @@ export const createShopRecord = internalMutation({
     const phone = normalizePhone(args.phone);
     const contactPerson = normalizeText(args.contactPerson);
     const referredBy = normalizeText(args.referredBy);
+    const outcome = normalizeOutcome(args.outcome);
     const images = args.images.map((imageUrl) => imageUrl.trim());
     const location = normalizeLocation(args.location);
     const neighborhood = normalizeNeighborhood(args.neighborhood);
+    const normalizedName = normalizeIndexText(name);
+    const normalizedNeighborhood = normalizeIndexText(neighborhood || fallbackNeighborhoodFromAddress(location.formattedAddress));
+    const normalizedPhone = normalizePhone(phone);
 
     if (!name) {
       throw new Error("Shop name is required.");
@@ -294,6 +320,10 @@ export const createShopRecord = internalMutation({
       phone,
       contactPerson,
       referredBy,
+      outcome,
+      normalizedName,
+      normalizedNeighborhood,
+      normalizedPhone,
       images,
       location,
       latitude: location.lat,
@@ -307,6 +337,7 @@ export const createShopRecord = internalMutation({
         phone,
         contactPerson,
         referredBy,
+        outcome,
         formattedAddress: location.formattedAddress,
       }),
       createdAt,
@@ -324,6 +355,7 @@ export const createShop = action({
     phone: v.string(),
     contactPerson: v.string(),
     referredBy: v.string(),
+    outcome: v.string(),
     images: v.array(v.string()),
     location: v.object({
       lat: v.number(),
@@ -427,10 +459,63 @@ export const moveShop = mutation({
         phone: shop.phone,
         contactPerson: shop.contactPerson,
         referredBy: shop.referredBy,
+        outcome: resolveOutcome(shop),
         formattedAddress: location?.formattedAddress ?? shop.address ?? "",
       }),
       updatedAt: Date.now(),
     });
+  },
+});
+
+export const findPotentialDuplicates = query({
+  args: {
+    name: v.string(),
+    neighborhood: v.string(),
+    phone: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const normalizedName = normalizeIndexText(args.name);
+    const normalizedNeighborhood = normalizeIndexText(args.neighborhood);
+    const normalizedPhone = normalizePhone(args.phone);
+    const matches = new Map<Id<"shops">, Doc<"shops">>();
+
+    if (normalizedPhone) {
+      const phoneMatches = await ctx.db
+        .query("shops")
+        .withIndex("by_normalized_phone", (q) => q.eq("normalizedPhone", normalizedPhone))
+        .take(5);
+
+      for (const shop of phoneMatches) {
+        matches.set(shop._id, shop);
+      }
+    }
+
+    if (normalizedName && normalizedNeighborhood) {
+      const nameMatches = await ctx.db
+        .query("shops")
+        .withIndex("by_normalized_name_and_normalized_neighborhood", (q) =>
+          q.eq("normalizedName", normalizedName).eq("normalizedNeighborhood", normalizedNeighborhood),
+        )
+        .take(5);
+
+      for (const shop of nameMatches) {
+        matches.set(shop._id, shop);
+      }
+    }
+
+    return [...matches.values()]
+      .sort((left, right) => right.createdAt - left.createdAt)
+      .slice(0, 5)
+      .map((shop) => ({
+        _id: shop._id,
+        category: resolveCategory(shop),
+        mission: resolveMission(shop),
+        name: shop.name,
+        neighborhood: resolveNeighborhood(shop, resolveLocation(shop)),
+        phone: shop.phone,
+        outcome: resolveOutcome(shop),
+        createdAt: shop.createdAt,
+      }));
   },
 });
 
@@ -490,6 +575,7 @@ export const getShop = query({
       phone: shop.phone,
       contactPerson: shop.contactPerson,
       referredBy: shop.referredBy,
+      outcome: resolveOutcome(shop),
       images,
       location,
       createdAt: shop.createdAt,

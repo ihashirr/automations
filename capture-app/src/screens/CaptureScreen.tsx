@@ -1,6 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
-import { startTransition, useEffect, useRef, useState, ReactNode } from "react";
+import { useQuery } from "convex/react";
+import { startTransition, useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -29,18 +30,20 @@ import {
   SignalZero,
   Trash2,
 } from "lucide-react-native";
+import { api } from "../../convex/_generated/api";
 import { AppBottomSheet } from "../components/AppBottomSheet";
 import { AppTip } from "../components/AppTip";
 import { CaptureMapPicker } from "../components/CaptureMapPicker";
+import { getVisitOutcomeLabel, visitOutcomeOptions } from "../constants/visit-outcomes";
 import { getMissionDefinition, missionCatalog } from "../constants/missions";
 import { palette, radii, shadows, spacing, typography } from "../constants/theme";
 import { useCaptureQueue } from "../contexts/CaptureQueueContext";
 import { useMissionControl } from "../contexts/MissionControlContext";
-import { formatCoordinates } from "../lib/format";
+import { formatCaptureTime, formatCoordinates, normalizeText, sanitizePhoneInput } from "../lib/format";
 import { playMissionAccomplishedHaptic, playPinSuccessHaptic, playSelectionHaptic } from "../lib/haptics";
 import { mapPickerAssetsToDraftImages } from "../lib/images";
 import { getLocationLabel, resolveLocationDetails } from "../lib/location";
-import { DraftImage, ShopDraft } from "../types/shops";
+import { DraftImage, DuplicateCandidate, ShopDraft } from "../types/shops";
 
 type FlashState = { tone: "success" | "warning" | "error"; message: string };
 type Coordinates = { lat: number; lng: number };
@@ -74,13 +77,14 @@ function createEmptyDraft(mission: string, category: string | null): ShopDraft {
     phone: "",
     contactPerson: "",
     referredBy: "",
+    outcome: null,
     images: [],
     location: null,
   };
 }
 
 function isDraftPristine(draft: ShopDraft) {
-  return !draft.name && !draft.phone && !draft.contactPerson && !draft.referredBy && !draft.location && draft.images.length === 0;
+  return !draft.name && !draft.phone && !draft.contactPerson && !draft.referredBy && !draft.outcome && !draft.location && draft.images.length === 0;
 }
 
 export function CaptureScreen() {
@@ -95,7 +99,7 @@ export function CaptureScreen() {
     getMissionCategories,
     startCategoryMission,
   } = useMissionControl();
-  const { isOnline, pendingCount, saveCapture } = useCaptureQueue();
+  const { isOnline, pendingCaptures, pendingCount, saveCapture } = useCaptureQueue();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<ShopDraft>(() => createEmptyDraft(activeMissionLabel, activeCategoryLabel));
   const [flashState, setFlashState] = useState<FlashState | null>(null);
@@ -111,6 +115,65 @@ export function CaptureScreen() {
   const contactRef = useRef<TextInput>(null);
   const referredByRef = useRef<TextInput>(null);
   const nameRef = useRef<TextInput>(null);
+  const duplicateNeighborhood = draft.neighborhood || draft.location?.formattedAddress.split(",")[0]?.trim() || "";
+  const remoteDuplicates = useQuery(api.shops.findPotentialDuplicates, {
+    name: draft.name,
+    neighborhood: duplicateNeighborhood,
+    phone: draft.phone,
+  });
+  const localDuplicates = useMemo<DuplicateCandidate[]>(() => {
+    const normalizedName = normalizeText(draft.name).toLowerCase();
+    const normalizedNeighborhood = normalizeText(duplicateNeighborhood).toLowerCase();
+    const normalizedPhone = sanitizePhoneInput(draft.phone);
+
+    if (!normalizedName && !normalizedPhone) {
+      return [];
+    }
+
+    return pendingCaptures
+      .filter((capture) => {
+        const samePhone = normalizedPhone && sanitizePhoneInput(capture.phone) === normalizedPhone;
+        const sameNameAndArea =
+          normalizedName &&
+          normalizedNeighborhood &&
+          normalizeText(capture.name).toLowerCase() === normalizedName &&
+          normalizeText(capture.neighborhood).toLowerCase() === normalizedNeighborhood;
+
+        return Boolean(samePhone || sameNameAndArea);
+      })
+      .slice(0, 3)
+      .map((capture) => ({
+        id: capture.localId,
+        category: capture.category,
+        mission: capture.mission,
+        name: capture.name,
+        neighborhood: capture.neighborhood,
+        phone: capture.phone,
+        outcome: capture.outcome ?? "unknown",
+        createdAt: capture.createdAt,
+        source: "queued",
+      }));
+  }, [draft.name, draft.phone, duplicateNeighborhood, pendingCaptures]);
+  const duplicateCandidates = useMemo<DuplicateCandidate[]>(() => {
+    const liveDuplicates = (remoteDuplicates ?? []).map((candidate) => ({
+      id: candidate._id,
+      category: candidate.category,
+      mission: candidate.mission,
+      name: candidate.name,
+      neighborhood: candidate.neighborhood,
+      phone: candidate.phone,
+      outcome: candidate.outcome,
+      createdAt: candidate.createdAt,
+      source: "live" as const,
+    }));
+    const merged = new Map<string, DuplicateCandidate>();
+
+    for (const candidate of [...localDuplicates, ...liveDuplicates]) {
+      merged.set(String(candidate.id), candidate);
+    }
+
+    return [...merged.values()].sort((left, right) => right.createdAt - left.createdAt).slice(0, 3);
+  }, [localDuplicates, remoteDuplicates]);
 
   useEffect(() => {
     if (!flashState) return;
@@ -243,7 +306,7 @@ export function CaptureScreen() {
     if (!result.canceled) appendImages(mapPickerAssetsToDraftImages(result.assets));
   }
 
-  async function handleSave() {
+  async function persistDraft() {
     if (!draft.name.trim()) {
       showFlash("error", "Shop name is required.");
       nameRef.current?.focus();
@@ -251,6 +314,10 @@ export function CaptureScreen() {
     }
     if (!draft.location) {
       showFlash("error", "Choose a location first.");
+      return;
+    }
+    if (!draft.outcome) {
+      showFlash("error", "Select the visit outcome.");
       return;
     }
 
@@ -269,7 +336,33 @@ export function CaptureScreen() {
     }
   }
 
-  const saveDisabled = isSaving || !draft.name.trim() || !draft.location;
+  async function handleSave() {
+    if (duplicateCandidates.length > 0) {
+      const duplicateSummary = duplicateCandidates
+        .map((candidate) => `${candidate.name} • ${candidate.neighborhood || "Unknown area"} • ${candidate.source === "live" ? "Live" : "Queued"}`)
+        .join("\n");
+
+      Alert.alert(
+        "Possible duplicate",
+        `${duplicateSummary}\n\nSave anyway?`,
+        [
+          { text: "Review", style: "cancel" },
+          {
+            text: "Save Anyway",
+            style: "destructive",
+            onPress: () => {
+              void persistDraft();
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    await persistDraft();
+  }
+
+  const saveDisabled = isSaving || !draft.name.trim() || !draft.location || !draft.outcome;
   const selectedCategoryId = getCategoryIdFromLabel(pickerMissionId, draft.category) ?? (pickerMissionId === activeMissionId ? activeCategoryId : null);
 
   return (
@@ -287,7 +380,7 @@ export function CaptureScreen() {
                 <Text style={styles.badgeCount}>{pendingCount} pending</Text>
               )}
             </View>
-            <Text style={styles.heroTitle}>Fast Lead Capture</Text>
+            <Text style={styles.heroTitle}>Quick Visit</Text>
             <Pressable onPress={() => { void playSelectionHaptic(); openFolderPicker(); }} style={({ pressed }) => [styles.destinationCard, pressed && styles.pressedDestinationCard]}>
               <View style={styles.destinationIcon}>
                 <FolderOpen color={COLORS.accentStrong} size={18} />
@@ -303,10 +396,31 @@ export function CaptureScreen() {
               </View>
             </Pressable>
             <AppTip
-              message="Choose the module and folder before saving so new leads land in the right queue immediately."
+              message="Default is quick save into your current folder. Change it only when this visit belongs somewhere else."
               title="Save Destination"
             />
           </View>
+
+          {duplicateCandidates.length > 0 ? (
+            <View style={styles.duplicateCard}>
+              <Text style={styles.duplicateTitle}>Possible duplicate</Text>
+              <Text style={styles.duplicateBody}>
+                This shop may already exist. Review before saving another record.
+              </Text>
+              {duplicateCandidates.map((candidate) => (
+                <View key={`${candidate.source}-${candidate.id}`} style={styles.duplicateRow}>
+                  <View style={styles.flex}>
+                    <Text numberOfLines={1} style={styles.duplicateName}>
+                      {candidate.name}
+                    </Text>
+                    <Text numberOfLines={1} style={styles.duplicateMeta}>
+                      {candidate.neighborhood || "Unknown area"} • {getVisitOutcomeLabel(candidate.outcome)} • {candidate.source === "live" ? "Live" : "Queued"} • {formatCaptureTime(candidate.createdAt)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           <View style={styles.card}>
             <Text style={styles.eyebrow}>Images</Text>
@@ -405,6 +519,41 @@ export function CaptureScreen() {
 
           <View style={styles.card}>
             <View style={styles.cardHeader}>
+              <Text style={styles.eyebrow}>Visit Outcome</Text>
+              <View style={[styles.statusBadge, draft.outcome ? styles.statusConfirmed : styles.statusPending]}>
+                <Text style={[styles.statusBadgeText, draft.outcome ? styles.statusConfirmedText : styles.statusPendingText]}>
+                  {draft.outcome ? "Selected" : "Required"}
+                </Text>
+              </View>
+            </View>
+            <AppTip
+              message="Every visit should end with one clear outcome so you can review the day without guessing what happened."
+              tone="info"
+            />
+            <View style={styles.outcomeGrid}>
+              {visitOutcomeOptions.map((option) => (
+                <Pressable
+                  key={option.id}
+                  onPress={() => {
+                    void playSelectionHaptic();
+                    updateField("outcome", option.id);
+                  }}
+                  style={({ pressed }) => [
+                    styles.outcomeChip,
+                    draft.outcome === option.id && styles.outcomeChipActive,
+                    pressed && draft.outcome !== option.id && styles.pressedOpacity,
+                  ]}
+                >
+                  <Text style={[styles.outcomeChipText, draft.outcome === option.id && styles.outcomeChipTextActive]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
               <Text style={styles.eyebrow}>Location</Text>
               <View style={[styles.statusBadge, draft.location ? styles.statusConfirmed : styles.statusPending]}>
                 <Text style={[styles.statusBadgeText, draft.location ? styles.statusConfirmedText : styles.statusPendingText]}>
@@ -457,7 +606,13 @@ export function CaptureScreen() {
 
         <View style={[styles.saveBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <Text style={[styles.saveStatus, !saveDisabled && styles.saveStatusReady]}>
-            {saveDisabled ? (draft.name ? "Missing: location" : "Missing: shop name") : "Ready to save"}
+            {saveDisabled
+              ? !draft.name.trim()
+                ? "Missing: shop name"
+                : !draft.outcome
+                  ? "Missing: visit outcome"
+                  : "Missing: location"
+              : "Ready to save"}
           </Text>
           <Pressable 
             disabled={saveDisabled} 
@@ -735,6 +890,38 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     ...shadows.card,
   },
+  duplicateCard: {
+    gap: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: "#F1B08F",
+    backgroundColor: "#FFF7F2",
+    padding: spacing.md,
+    ...shadows.card,
+  },
+  duplicateTitle: {
+    fontSize: typography.body,
+    fontWeight: "800",
+    color: COLORS.warning,
+  },
+  duplicateBody: {
+    fontSize: typography.label,
+    color: COLORS.textMuted,
+  },
+  duplicateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  duplicateName: {
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  duplicateMeta: {
+    fontSize: typography.label,
+    color: COLORS.textMuted,
+  },
   cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   eyebrow: { fontSize: typography.overline, fontWeight: "800", color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1 },
   
@@ -753,6 +940,33 @@ const styles = StyleSheet.create({
   inputLarge: { height: 56, fontSize: 24, fontWeight: "800", color: COLORS.text, borderBottomWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
   inputDense: { height: 46, fontSize: typography.body, fontWeight: "600", color: COLORS.text, borderBottomWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
   inputFocused: { borderColor: "#3B82F6" },
+  outcomeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
+  outcomeChip: {
+    minHeight: 42,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  outcomeChipActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: "#FFF3EC",
+  },
+  outcomeChipText: {
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  outcomeChipTextActive: {
+    color: COLORS.accentStrong,
+  },
 
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.pill },
   statusPending: { backgroundColor: COLORS.warningSoft },

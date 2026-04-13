@@ -39,6 +39,7 @@ import { api } from "../../convex/_generated/api";
 import { AppBottomSheet } from "../components/AppBottomSheet";
 import { AppTip } from "../components/AppTip";
 import { ShopCard } from "../components/ShopCard";
+import { getVisitOutcomeLabel } from "../constants/visit-outcomes";
 import {
   getMissionDefinition,
   missionCatalog,
@@ -276,6 +277,7 @@ export function ShopsListScreen() {
       name: getRowName(row),
       neighborhood: getRowNeighborhood(row),
       onLongPress: () => setSelectedLead(row),
+      outcome: getRowOutcome(row),
       phone: getRowPhone(row),
     };
 
@@ -655,6 +657,10 @@ function getRowNeighborhood(row: LeadTarget) {
 
 function getRowPhone(row: LeadTarget) {
   return row.kind === "pending" ? row.capture.phone : row.shop.phone;
+}
+
+function getRowOutcome(row: LeadTarget) {
+  return row.kind === "pending" ? row.capture.outcome ?? "unknown" : row.shop.outcome;
 }
 
 const styles = StyleSheet.create({
