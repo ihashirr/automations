@@ -47,7 +47,7 @@ function runHeuristics(text) {
   const invoiceDateRegex = /Invoice\s*Date\s*:?[\s]*([0-9]{1,2}[-\/][A-Za-z]{3}[-\/][0-9]{4}|[0-9]{1,2}[-\/][0-9]{1,2}[-\/][0-9]{2,4})/i;
   const subtotalRegex = /Subtotal\s*:?[\sA-Z]*([0-9,]+\.\d{2})/i;
   const vatAmountRegex = /VAT(?:\s*Amount|\s*\(\s*([0-9]{1,2})%\s*\))?\s*:?[\sA-Z]*([0-9,]+\.\d{2})/i;
-  const totalRegex = /Total(?:\s*Amount\s*Payable)?\s*:?[\sA-Z]*([0-9,]+\.\d{2})/i;
+  const totalRegex = /\bTotal(?:\s*Amount\s*Payable)?\s*:?[\sA-Z]*([0-9,]+\.\d{2})/i;
   const currencyRegex = /\b(AED|د\.?إ|Dirham|Dirhams|\$|€|£)\b/i;
 
   // Currency
