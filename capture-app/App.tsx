@@ -1,5 +1,6 @@
 import "react-native-get-random-values";
 import { StatusBar } from "expo-status-bar";
+import Constants from "expo-constants";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CaptureQueueProvider } from "./src/contexts/CaptureQueueContext";
@@ -7,7 +8,13 @@ import { MissionControlProvider } from "./src/contexts/MissionControlContext";
 import { AppRoot } from "./src/root/AppRoot";
 import { ConfigurationScreen } from "./src/screens/ConfigurationScreen";
 
-const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
+type ExpoExtra = {
+  convexUrl?: string | null;
+};
+
+const convexUrlFromConfig =
+  (Constants.expoConfig?.extra as ExpoExtra | undefined)?.convexUrl ?? undefined;
+const convexUrl = convexUrlFromConfig ?? process.env.EXPO_PUBLIC_CONVEX_URL;
 const convexClient = convexUrl
   ? new ConvexReactClient(convexUrl, {
       unsavedChangesWarning: false,

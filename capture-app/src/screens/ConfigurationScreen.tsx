@@ -7,14 +7,20 @@ export function ConfigurationScreen() {
       <View style={styles.container}>
         <View style={styles.card}>
           <Text style={styles.eyebrow}>Configuration Required</Text>
-          <Text style={styles.title}>Add your Convex URL to boot the app.</Text>
+          <Text style={styles.title}>This build is missing its Convex URL.</Text>
           <Text style={styles.body}>
-            Set <Text style={styles.code}>EXPO_PUBLIC_CONVEX_URL</Text> in{" "}
-            <Text style={styles.code}>.env.local</Text>, then restart Expo.
+            Set <Text style={styles.code}>EXPO_PUBLIC_CONVEX_URL</Text> before you
+            build or export the app. For local exports, place it in{" "}
+            <Text style={styles.code}>.env</Text> or <Text style={styles.code}>.env.local</Text>.
+            For EAS builds, add it as an EAS environment variable.
           </Text>
           <Text style={styles.body}>
-            Photos also need S3 credentials in Convex environment variables before image
-            sync can complete.
+            The phone should never ask for this at runtime. If you see this screen,
+            the binary was created without the backend URL baked in.
+          </Text>
+          <Text style={styles.body}>
+            Photos also need S3 credentials in Convex environment variables before
+            image sync can complete.
           </Text>
         </View>
       </View>
