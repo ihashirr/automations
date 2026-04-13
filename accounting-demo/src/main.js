@@ -1,6 +1,6 @@
 // src/main.js
 import './style.css';
-import { simulateExtraction } from './extraction.js';
+import { simulateExtraction, extractFromPdf } from './extraction.js';
 import { runAuditChecks, getOverallStatus } from './validation.js';
 import { dom, showStep, renderExtractedData, renderAuditResults, showLoader } from './render.js';
 
@@ -8,12 +8,47 @@ let currentSessionData = null;
 
 function bindEvents() {
   // Step 1: Upload options
-  dom.buttons.demoCorrect.addEventListener('click', () => handleUpload('correct'));
-  dom.buttons.demoIncorrect.addEventListener('click', () => handleUpload('incorrect'));
+
+  // Mock processing
+  dom.buttons.demoCorrect.addEventListener('click', () => handleMockUpload('correct'));
+  dom.buttons.demoIncorrect.addEventListener('click', () => handleMockUpload('incorrect'));
+
+  // Real Upload
+  dom.inputs.browseFilesBtn.addEventListener('click', () => dom.inputs.realFileUpload.click());
+  dom.inputs.uploadZoneArea.addEventListener('click', () => dom.inputs.realFileUpload.click());
+  
+  dom.inputs.realFileUpload.addEventListener('change', async (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleRealUpload(e.target.files[0]);
+    }
+  });
+
+  // Drag and drop
+  dom.inputs.uploadZoneArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dom.inputs.uploadZoneArea.classList.add('dragover');
+  });
+  dom.inputs.uploadZoneArea.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dom.inputs.uploadZoneArea.classList.remove('dragover');
+  });
+  dom.inputs.uploadZoneArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dom.inputs.uploadZoneArea.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+       const file = e.dataTransfer.files[0];
+       if (file.type === "application/pdf") {
+          handleRealUpload(file);
+       } else {
+          alert("Please drop a valid PDF file.");
+       }
+    }
+  });
 
   // Step 2: Extracted actions
   dom.buttons.reUpload.addEventListener('click', () => {
     currentSessionData = null;
+    dom.layout.pdfIframe.src = "";
     showStep('upload');
   });
 
@@ -22,30 +57,63 @@ function bindEvents() {
   // Step 3: Finish action
   dom.buttons.finish.addEventListener('click', () => {
     currentSessionData = null;
+    dom.layout.pdfIframe.src = "";
     // reset UI state
     dom.auditResultsContainer.classList.add('hidden');
     showStep('upload');
   });
 }
 
-async function handleUpload(type) {
-  // Show loader, hide buttons
-  const actionsZone = document.querySelector('.demo-actions');
-  actionsZone.style.display = 'none';
-  showLoader(dom.uploadLoader, true);
-
+async function handleMockUpload(type) {
+  prepUploadUI("Extracting demo data...");
   try {
     currentSessionData = await simulateExtraction(type);
-    renderExtractedData(currentSessionData);
-    showStep('extracted');
+    completeUploadPhase();
   } catch (error) {
-    console.error("Extraction failed", error);
-    alert("Extraction mocked failure.");
-  } finally {
-    // Restore UI state for later
-    showLoader(dom.uploadLoader, false);
-    actionsZone.style.display = 'flex';
+    console.error(error);
+    restoreUploadUI();
   }
+}
+
+async function handleRealUpload(file) {
+  prepUploadUI("Extracting via PDF.js...");
+  try {
+    // Generate an object URL for the IFrame preview
+    const fileURL = URL.createObjectURL(file);
+    dom.layout.pdfIframe.src = fileURL;
+
+    // Run actual extraction
+    currentSessionData = await extractFromPdf(file);
+    completeUploadPhase();
+    
+  } catch(error) {
+    console.error(error);
+    alert("Extraction failed: " + error);
+    restoreUploadUI();
+  }
+}
+
+function prepUploadUI(statusMessage) {
+  const actionsZone = document.querySelector('.demo-samples-area');
+  const uploadZone = document.querySelector('.upload-zone');
+  actionsZone.style.display = 'none';
+  uploadZone.style.display = 'none';
+  dom.statusText.textContent = statusMessage;
+  showLoader(dom.uploadLoader, true);
+}
+
+function restoreUploadUI() {
+  const actionsZone = document.querySelector('.demo-samples-area');
+  const uploadZone = document.querySelector('.upload-zone');
+  showLoader(dom.uploadLoader, false);
+  actionsZone.style.display = 'block';
+  uploadZone.style.display = 'block';
+}
+
+function completeUploadPhase() {
+  renderExtractedData(currentSessionData);
+  showStep('extracted');
+  restoreUploadUI(); // reset for next time
 }
 
 function handleRunAudit() {

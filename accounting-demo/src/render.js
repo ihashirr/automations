@@ -7,7 +7,17 @@ export const dom = {
     extracted: document.getElementById('step-extracted'),
     audit: document.getElementById('step-audit')
   },
+  inputs: {
+    realFileUpload: document.getElementById('real-file-upload'),
+    uploadZoneArea: document.getElementById('upload-zone-area'),
+    browseFilesBtn: document.getElementById('btn-browse-files')
+  },
+  layout: {
+    panel: document.getElementById('panel-layout'),
+    pdfIframe: document.getElementById('pdf-iframe'),
+  },
   uploadLoader: document.getElementById('upload-loader'),
+  statusText: document.getElementById('extraction-status-text'),
   extractedGrid: document.getElementById('extracted-fields-container'),
   fileNameDisplay: document.getElementById('display-file-name'),
   auditLoading: document.getElementById('audit-loading'),
@@ -29,7 +39,23 @@ export const dom = {
  */
 export function showStep(stepKey) {
   Object.values(dom.steps).forEach(el => el.classList.add('hidden'));
-  dom.steps[stepKey].classList.remove('hidden');
+  if (stepKey === 'upload') {
+    dom.layout.panel.classList.add('hidden');
+    dom.steps.upload.classList.remove('hidden');
+  } else {
+    // When showing extracted/audit, show the panel layout
+    dom.steps.upload.classList.add('hidden');
+    dom.layout.panel.classList.remove('hidden');
+    
+    // Within the panel, ensure only the active inner step is shown
+    if (stepKey === 'extracted') {
+       dom.steps.extracted.classList.remove('hidden');
+       dom.steps.audit.classList.add('hidden');
+    } else if (stepKey === 'audit') {
+       dom.steps.extracted.classList.add('hidden');
+       dom.steps.audit.classList.remove('hidden');
+    }
+  }
 }
 
 /**

@@ -38,7 +38,7 @@ body {
 }
 
 .app-container {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 40px auto;
   padding: 0 20px;
 }
@@ -71,7 +71,7 @@ body {
 }
 
 .card.hidden {
-  display: none;
+  display: none !important;
 }
 
 .card-header {
@@ -111,11 +111,18 @@ body {
 
 /* Upload Zone */
 .upload-zone {
-  border: 2px dashed var(--border);
+  border: 2px dashed #9ca3af;
   border-radius: var(--radius);
   padding: 40px 20px;
   text-align: center;
   background: var(--bg);
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--primary);
+  background-color: #f0fdf4;
 }
 
 .upload-icon {
@@ -123,11 +130,23 @@ body {
   margin-bottom: 12px;
 }
 
+.demo-samples-area {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.text-sm {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .demo-actions {
   display: flex;
   justify-content: center;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 12px;
 }
 
 /* Buttons */
@@ -140,6 +159,11 @@ body {
   border: none;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
 }
 
 .btn-primary {
@@ -181,6 +205,45 @@ body {
   color: var(--text-main);
 }
 
+/* Panel Layout */
+#panel-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+#panel-layout.hidden {
+  display: none;
+}
+
+.preview-panel {
+  flex: 1;
+  min-width: 400px;
+  height: 600px;
+  position: sticky;
+  top: 20px;
+}
+
+.preview-container {
+  height: calc(100% - 56px); /* subtract header height */
+  background: #f3f4f6;
+}
+
+.data-panel {
+  flex: 1;
+}
+
+@media (max-width: 850px) {
+  #panel-layout {
+    flex-direction: column;
+  }
+  .preview-panel {
+    width: 100%;
+    height: 400px;
+    position: static;
+  }
+}
+
 /* Extracted View */
 .file-summary {
   display: flex;
@@ -203,7 +266,7 @@ body {
 
 .extracted-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -225,7 +288,7 @@ body {
 .field-val {
   display: block;
   font-weight: 500;
-  font-size: 15px;
+  font-size: 14px;
 }
 .field-val.missing {
   color: var(--danger);
@@ -300,10 +363,6 @@ body {
   border-bottom: none;
 }
 
-.audit-icon {
-  font-size: 18px;
-  margin-top: 2px;
-}
 .audit-details {
   flex: 1;
 }
@@ -322,6 +381,7 @@ body {
   font-weight: 500;
   padding: 4px 10px;
   border-radius: 12px;
+  margin-left: 8px;
 }
 .badge-pass { background: var(--success-bg); color: var(--success); }
 .badge-fail { background: var(--danger-bg); color: var(--danger); }
