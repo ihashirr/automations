@@ -238,36 +238,57 @@
 
         </section>
 
-        <!-- RIGHT: Decision Rail -->
+        <!-- RIGHT: Decision Console -->
         <aside class="ws-decision">
           <div class="panel">
             <div class="panel-head"><h3>Decision</h3></div>
             <div class="panel-body">
-              <!-- Status Hero -->
-              <div class="status-hero" id="final-summary-card">
-                <div class="status-icon-wrap" id="status-icon-wrap"></div>
-                <h3 id="automation-result-text">Select a document</h3>
-                <p class="status-oneliner" id="status-oneliner">Upload or select an invoice from the queue.</p>
+
+              <!-- Decision Summary Card -->
+              <div class="decision-card" id="final-summary-card">
+                <div class="dc-top">
+                  <div class="status-icon-wrap" id="status-icon-wrap"></div>
+                  <div class="dc-title-block">
+                    <h3 id="automation-result-text">Select a document</h3>
+                    <span class="dc-risk-label" id="dc-risk-label"></span>
+                  </div>
+                </div>
+                <p class="dc-reason" id="dc-reason">Upload or select an invoice from the queue.</p>
+                <p class="dc-proof" id="dc-proof"></p>
               </div>
-              <!-- Meta Pills -->
-              <div class="meta-pills">
-                <div class="pill"><span class="pill-label">Confidence</span><span class="pill-val" id="meta-confidence">--</span></div>
-                <div class="pill"><span class="pill-label">Currency</span><span class="pill-val" id="meta-currency">--</span></div>
-                <div class="pill"><span class="pill-label">Audited</span><span class="pill-val" id="meta-time">--</span></div>
-                <div class="pill"><span class="pill-label">Rules</span><span class="pill-val" id="meta-rules">--</span></div>
+
+              <!-- Metrics Grid -->
+              <div class="metrics-grid">
+                <div class="metric-item"><span class="metric-label">Confidence</span><span class="metric-val" id="meta-confidence">--</span></div>
+                <div class="metric-item"><span class="metric-label">Currency</span><span class="metric-val" id="meta-currency">--</span></div>
+                <div class="metric-item"><span class="metric-label">Checked at</span><span class="metric-val" id="meta-time">--</span></div>
+                <div class="metric-item"><span class="metric-label">Rules passed</span><span class="metric-val" id="meta-rules">--</span></div>
+                <div class="metric-item"><span class="metric-label">Exceptions</span><span class="metric-val" id="meta-exceptions">--</span></div>
+                <div class="metric-item"><span class="metric-label">Review needed</span><span class="metric-val" id="meta-review-needed">--</span></div>
               </div>
-              <!-- Evidence Trail -->
+
+              <!-- Evidence Checklist -->
               <div class="evidence-section">
-                <h4>Evidence Trail</h4>
-                <ul class="evidence-log" id="audit-list-container"></ul>
+                <h4>Evidence Checklist</h4>
+                <ul class="evidence-checklist" id="audit-list-container"></ul>
               </div>
-              <!-- Actions -->
+
+              <!-- Decision Actions -->
               <div class="decision-actions">
-                <button id="btn-re-upload" class="topbar-btn" style="width:100%; justify-content:center;">
+                <button id="btn-override" class="dc-btn dc-btn-secondary">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  Override Decision
+                </button>
+                <button id="btn-send-review" class="dc-btn dc-btn-primary">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                  Send to Review
+                </button>
+                <button id="btn-re-upload" class="dc-btn dc-btn-ghost">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   Add More Files
                 </button>
               </div>
+
             </div>
           </div>
         </aside>

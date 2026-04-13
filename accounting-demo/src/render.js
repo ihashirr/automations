@@ -155,32 +155,100 @@ const CHECK_ICONS = {
 };
 
 /**
- * Renders the Checks Performed TABLE + Decision Rail content
+ * Renders the Decision Console (right rail) + Checks Performed table (center)
  */
 export function renderAuditResults(findings, overallStatus, extractedFields) {
   const sym = extractedFields?.currencySymbol || '';
 
-  // Decision Rail: Status Hero
-  dom.summaryCard.className = `status-hero status-${overallStatus}`;
-  dom.statusIconWrap.innerHTML = STATUS_ICONS[overallStatus] || '';
-  let resultText = overallStatus === 'pass' ? 'Auto-Approved' : (overallStatus === 'fail' ? 'Exceptions Found' : 'Needs Accountant Review');
-  dom.summaryText.textContent = resultText;
-  dom.statusOneliner.textContent = STATUS_ONE_LINERS[overallStatus] || '';
-
-  // Meta pills
+  // Confidence calc
   let confidence = (Math.random() * (99.2 - 95.5) + 95.5).toFixed(1);
   if (overallStatus === 'review') confidence = (Math.random() * (89 - 78) + 78).toFixed(1);
   if (overallStatus === 'fail') confidence = (Math.random() * (72 - 48) + 48).toFixed(1);
 
+  // Counts
   let pCount = 0, fCount = 0, rCount = 0;
   findings.forEach(f => { if (f.status === 'pass') pCount++; if (f.status === 'fail') fCount++; if (f.status === 'review') rCount++; });
+  const totalChecks = findings.length;
 
-  document.getElementById('meta-confidence').textContent = confidence + '%';
-  document.getElementById('meta-currency').textContent = sym || 'N/A';
-  document.getElementById('meta-time').textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  document.getElementById('meta-rules').textContent = `${pCount}P / ${fCount}F / ${rCount}R`;
+  // ───── Decision Summary Card ─────
+  dom.summaryCard.className = `decision-card status-${overallStatus}`;
+  dom.statusIconWrap.innerHTML = STATUS_ICONS[overallStatus] || '';
 
-  // CENTER: Checks Performed table
+  // Title
+  let resultText = 'Auto-Approved';
+  if (overallStatus === 'fail') resultText = 'Exceptions Found';
+  if (overallStatus === 'review') resultText = 'Needs Accountant Review';
+  dom.summaryText.textContent = resultText;
+
+  // Risk label
+  const riskEl = document.getElementById('dc-risk-label');
+  if (riskEl) {
+    if (overallStatus === 'pass') {
+      riskEl.textContent = 'Low risk';
+      riskEl.className = 'dc-risk-label dc-risk-low';
+    } else if (overallStatus === 'review') {
+      riskEl.textContent = 'Medium risk';
+      riskEl.className = 'dc-risk-label dc-risk-med';
+    } else {
+      riskEl.textContent = 'High risk';
+      riskEl.className = 'dc-risk-label dc-risk-high';
+    }
+  }
+
+  // Reason
+  const reasonEl = document.getElementById('dc-reason');
+  if (reasonEl) {
+    if (overallStatus === 'pass') {
+      reasonEl.textContent = `${pCount}/${totalChecks} validation checks passed. No exceptions detected.`;
+    } else if (overallStatus === 'fail') {
+      reasonEl.textContent = `${fCount} exception${fCount !== 1 ? 's' : ''} detected. Manual review required before approval.`;
+    } else {
+      reasonEl.textContent = `${rCount} anomal${rCount !== 1 ? 'ies' : 'y'} flagged. Accountant sign-off needed.`;
+    }
+  }
+
+  // Proof
+  const proofEl = document.getElementById('dc-proof');
+  if (proofEl) {
+    const sub = extractedFields?.subtotal;
+    const vat = extractedFields?.vatAmount;
+    const total = extractedFields?.total;
+    if (overallStatus === 'pass' && sub != null && vat != null && total != null) {
+      proofEl.textContent = `Key proof: VAT and total matched exactly (${sym} ${total.toLocaleString(undefined,{minimumFractionDigits:2})})`;
+    } else if (overallStatus === 'fail') {
+      const failTitles = findings.filter(f => f.status === 'fail').map(f => {
+        if (f.title.includes('VAT')) return 'VAT mismatch';
+        if (f.title.includes('Total')) return 'Total mismatch';
+        return f.title;
+      });
+      proofEl.textContent = `Key issue: ${failTitles.join(', ')}`;
+    } else {
+      const reviewTitles = findings.filter(f => f.status === 'review').map(f => {
+        if (f.title.includes('Confidence') || f.title.includes('Low')) return 'Low confidence extraction';
+        if (f.title.includes('VAT')) return 'VAT rounding difference';
+        return f.title;
+      });
+      proofEl.textContent = `Flagged: ${reviewTitles.join(', ')}`;
+    }
+  }
+
+  // ───── Metrics Grid ─────
+  const setMetric = (id, val, cls) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = val;
+      el.className = 'metric-val' + (cls ? ` ${cls}` : '');
+    }
+  };
+
+  setMetric('meta-confidence', confidence + '%', parseFloat(confidence) >= 90 ? 'metric-val-pass' : 'metric-val-review');
+  setMetric('meta-currency', sym || 'N/A');
+  setMetric('meta-time', new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+  setMetric('meta-rules', `${pCount}/${totalChecks}`, pCount === totalChecks ? 'metric-val-pass' : '');
+  setMetric('meta-exceptions', fCount === 0 ? '0' : String(fCount), fCount === 0 ? 'metric-val-pass' : 'metric-val-fail');
+  setMetric('meta-review-needed', overallStatus === 'pass' ? 'No' : 'Yes', overallStatus === 'pass' ? 'metric-val-pass' : 'metric-val-review');
+
+  // ───── CENTER: Checks Performed table ─────
   dom.auditTableBody.innerHTML = '';
 
   const sub = extractedFields?.subtotal;
@@ -188,11 +256,9 @@ export function renderAuditResults(findings, overallStatus, extractedFields) {
   const rate = extractedFields?.vatRate;
   const total = extractedFields?.total;
 
-  // Row: Required Fields
   const allPresent = sub != null && vat != null && rate != null && total != null;
   addCheckRow('Required Fields', 'All 6 fields present', allPresent ? '6 / 6 extracted' : 'Missing fields detected', allPresent ? 'pass' : 'review');
 
-  // Row: VAT Calculation
   if (sub != null && rate != null && vat != null) {
     const expectedVat = sub * rate;
     const vatDiff = Math.abs(Math.abs(expectedVat) - Math.abs(vat));
@@ -201,7 +267,6 @@ export function renderAuditResults(findings, overallStatus, extractedFields) {
     addCheckRow('VAT Match', `Subtotal × ${ratePct}%`, `${sym} ${sub.toLocaleString(undefined,{minimumFractionDigits:2})} × ${ratePct}% = ${sym} ${expectedVat.toFixed(2)}`, status);
   }
 
-  // Row: Total Validation
   if (sub != null && vat != null && total != null) {
     const signedVat = sub < 0 ? -Math.abs(vat) : Math.abs(vat);
     const expectedTotal = sub + signedVat;
@@ -210,23 +275,66 @@ export function renderAuditResults(findings, overallStatus, extractedFields) {
     addCheckRow('Total Validation', `Subtotal + VAT`, `${sym} ${sub.toLocaleString(undefined,{minimumFractionDigits:2})} + ${sym} ${vat.toFixed(2)} = ${sym} ${expectedTotal.toFixed(2)}`, status);
   }
 
-  // Row: OCR Confidence
   addCheckRow('Confidence Gate', 'OCR avg ≥ 95%', `${confidence}% (vs 98% benchmark)`, parseFloat(confidence) >= 90 ? 'pass' : 'review');
-
-  // Row: Approval Rule
   addCheckRow('Approval Rule', 'All checks pass', overallStatus === 'pass' ? 'Auto-approved' : (overallStatus === 'fail' ? 'Blocked — exceptions found' : 'Held for manual review'), overallStatus);
 
-  // Evidence Trail (right rail)
+  // ───── Evidence Checklist (right rail) ─────
   dom.auditList.innerHTML = '';
-  findings.forEach(f => {
+
+  // Compact checklist items  
+  const checklistItems = buildChecklist(findings, extractedFields, sym, confidence);
+  checklistItems.forEach(item => {
     const li = document.createElement('li');
-    const iconColor = f.status === 'pass' ? 'check-pass' : (f.status === 'fail' ? 'check-fail' : 'check-review');
+    const colorClass = item.status === 'pass' ? 'ec-pass' : (item.status === 'fail' ? 'ec-fail' : 'ec-review');
+    const icon = item.status === 'pass' ? '✓' : (item.status === 'fail' ? '✗' : '⚠');
     li.innerHTML = `
-      <span class="evidence-icon ${iconColor}">${f.status === 'pass' ? '✓' : (f.status === 'fail' ? '✗' : '⚠')}</span>
-      <span><strong>${f.title}:</strong> ${f.desc}</span>
+      <span class="ec-label">${item.label}</span>
+      <span class="ec-value ${colorClass}">${item.value} ${icon}</span>
     `;
     dom.auditList.appendChild(li);
   });
+}
+
+/**
+ * Builds a compact evidence checklist
+ */
+function buildChecklist(findings, fields, sym, confidence) {
+  const items = [];
+  
+  items.push({
+    label: 'Required fields',
+    value: fields?.invoiceNumber ? 'Present' : 'Missing',
+    status: fields?.invoiceNumber ? 'pass' : 'review'
+  });
+
+  if (fields?.subtotal != null && fields?.vatRate != null && fields?.vatAmount != null) {
+    const expected = fields.subtotal * fields.vatRate;
+    const diff = Math.abs(Math.abs(expected) - Math.abs(fields.vatAmount));
+    items.push({
+      label: 'VAT match',
+      value: diff === 0 ? `${sym} ${fields.vatAmount.toFixed(2)}` : `Off by ${sym} ${diff.toFixed(2)}`,
+      status: diff === 0 ? 'pass' : (diff <= 0.05 ? 'review' : 'fail')
+    });
+  }
+
+  if (fields?.subtotal != null && fields?.vatAmount != null && fields?.total != null) {
+    const signedVat = fields.subtotal < 0 ? -Math.abs(fields.vatAmount) : Math.abs(fields.vatAmount);
+    const expected = fields.subtotal + signedVat;
+    const diff = Math.abs(expected - fields.total);
+    items.push({
+      label: 'Total match',
+      value: diff === 0 ? `${sym} ${fields.total.toLocaleString(undefined,{minimumFractionDigits:2})}` : `Off by ${sym} ${diff.toFixed(2)}`,
+      status: diff === 0 ? 'pass' : (diff <= 0.05 ? 'review' : 'fail')
+    });
+  }
+
+  items.push({
+    label: 'Confidence',
+    value: confidence + '%',
+    status: parseFloat(confidence) >= 90 ? 'pass' : 'review'
+  });
+
+  return items;
 }
 
 function addCheckRow(check, formula, output, status) {
