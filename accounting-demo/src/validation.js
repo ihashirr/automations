@@ -38,7 +38,8 @@ export function runAuditChecks(fields) {
 
   // Check 2: VAT Calculation (subtotal * vatRate = vatAmount)
   const expectedVat = fields.subtotal * fields.vatRate;
-  const vatDiff = Math.abs(expectedVat - fields.vatAmount);
+  // Absolute match against magnitude since VAT display might be positive on credit notes
+  const vatDiff = Math.abs(Math.abs(expectedVat) - Math.abs(fields.vatAmount));
   
   if (vatDiff === 0) {
     findings.push({
@@ -61,7 +62,9 @@ export function runAuditChecks(fields) {
   }
 
   // Check 3: Total Calculation (subtotal + vatAmount = total)
-  const expectedTotal = fields.subtotal + fields.vatAmount;
+  // Credit Notes natively display VAT as a positive sum but mathematically negate it against the Subtotal.
+  const signedVatAmount = fields.subtotal < 0 ? -Math.abs(fields.vatAmount) : Math.abs(fields.vatAmount);
+  const expectedTotal = fields.subtotal + signedVatAmount;
   const totalDiff = Math.abs(expectedTotal - fields.total);
   
   if (totalDiff === 0) {

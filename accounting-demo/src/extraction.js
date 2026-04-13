@@ -43,11 +43,11 @@ function runHeuristics(text) {
   // Normalize text to avoid missing whitespace
   const normalized = text.replace(/\s+/g, ' ');
 
-  const invoiceNoRegex = /(?:Tax\s*Invoice\s*#|Invoice\s*(?:No|Number|#)\s*:?)[\s#:-]*([A-Z0-9-]+)/i;
+  const invoiceNoRegex = /(?:Tax\s*(?:Invoice|Credit\s*Note)\s*#|(?:Invoice|Credit\s*Note)(?!\s+Date)\s*(?:No\.?|Number|#)?\s*:?)[\s#:-]*([A-Z0-9-]+)/i;
   const invoiceDateRegex = /Invoice\s*Date\s*:?[\s]*([0-9]{1,2}[-\/][A-Za-z]{3}[-\/][0-9]{4}|[0-9]{1,2}[-\/][0-9]{1,2}[-\/][0-9]{2,4})/i;
-  const subtotalRegex = /Subtotal\s*:?[\sA-Z]*([0-9,]+\.\d{2})/i;
-  const vatAmountRegex = /VAT(?:\s*Amount|\s*\(\s*([0-9]{1,2})%\s*\))?\s*:?[\sA-Z]*([0-9,]+\.\d{2})/i;
-  const totalRegex = /\bTotal(?:\s*Amount\s*Payable)?\s*:?[\sA-Z]*([0-9,]+\.\d{2})/i;
+  const subtotalRegex = /Subtotal\s*:?[\sA-Z]*(-?\s*[0-9,]+\.\d{2})/i;
+  const vatAmountRegex = /VAT(?:\s*Amount|\s*\(\s*([0-9]{1,2})%\s*\))?\s*:?[\sA-Z]*(-?\s*[0-9,]+\.\d{2})/i;
+  const totalRegex = /\bTotal(?:\s*Amount\s*Payable)?\s*:?[\sA-Z]*(-?\s*[0-9,]+\.\d{2})/i;
   const currencyRegex = /\b(AED|د\.?إ|Dirham|Dirhams|\$|€|£)\b/i;
 
   // Currency
@@ -66,7 +66,7 @@ function runHeuristics(text) {
     const match = normalized.match(regex);
     if (match) {
       // The amount is always the last capturing group for total and subtotal.
-      const val = parseFloat(match[match.length - 1].replace(/,/g, ''));
+      const val = parseFloat(match[match.length - 1].replace(/[,\s]/g, ''));
       return isNaN(val) ? null : val;
     }
     return null;
@@ -80,7 +80,7 @@ function runHeuristics(text) {
   const vatMatch = normalized.match(vatAmountRegex);
   if (vatMatch) {
     if (vatMatch[2]) {
-      vatAmount = parseFloat(vatMatch[2].replace(/,/g, ''));
+      vatAmount = parseFloat(vatMatch[2].replace(/[,\s]/g, ''));
     }
     if (vatMatch[1]) {
       vatRate = parseFloat(vatMatch[1]) / 100;
