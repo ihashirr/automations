@@ -46,16 +46,17 @@ function runHeuristics(text) {
   // VERY basic regex heuristic logic for demo purposes. 
   // It covers common structures but is intentionally fragile to trigger "Needs Review" on complex files.
   
-  // Invoice Number
-  const invMatch = normalized.match(/Invoice\s*(?:No|#|Number)?[:\s]*([A-Z0-9\-]+)/i);
+  // Invoice Number (ignore 'Invoice Date')
+  const invMatch = normalized.match(/Invoice(?!\s+Date)\s*(?:No\.?|#|Number)?[\s:]*([A-Z0-9\-]+)/i);
   const invoiceNumber = invMatch ? invMatch[1] : null;
 
   // Invoice Date
   // looks for Date: Nov 15, 2026 or 15/11/2026 etc
   const dateMatch = normalized.match(/Date[:\s]*([A-Z0-9\-\/,\s]+)/i);
-  const invoiceDate = dateMatch ? dateMatch[1].substring(0, 15).trim() : null; // roughly grab next few chars
+  // remove trailing words like "Due" that might get scooped up
+  const invoiceDate = dateMatch ? dateMatch[1].substring(0, 15).replace(/(?:\bDue\b|\bInvoice\b|AED|\$|€).*$/i, '').trim() : null;
 
-  // Currency extraction helper
+  // Currency extraction helper (use non-greedy match .*? to skip any currency symbol like 'AED ' or '$')
   const extractAmount = (regex) => {
     const match = normalized.match(regex);
     if (match) {
@@ -67,13 +68,13 @@ function runHeuristics(text) {
   };
 
   // Subtotal
-  const subtotal = extractAmount(/Subtotal[:\s]*\$?([0-9,]+\.[0-9]{2})/i);
+  const subtotal = extractAmount(/Subtotal.*?([0-9,]+\.[0-9]{2})/i);
   
   // VAT / Tax
-  const vatAmount = extractAmount(/(?:VAT|Tax)[\s\w]*[:\s]*\$?([0-9,]+\.[0-9]{2})/i);
+  const vatAmount = extractAmount(/(?:VAT|Tax).*?([0-9,]+\.[0-9]{2})/i);
   
   // Total
-  const total = extractAmount(/(?:Total|Amount Due|Balance Due)[:\s]*\$?([0-9,]+\.[0-9]{2})/i);
+  const total = extractAmount(/(?:Total|Amount Due|Balance Due).*?([0-9,]+\.[0-9]{2})/i);
 
   // Derive VAT rate from subtotal and vatAmount
   let vatRate = null;
