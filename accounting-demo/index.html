@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Accounting Automation Demo</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div class="app-container">
+      <header class="app-header">
+        <h1>AuditBot Demo</h1>
+        <p class="subtitle">Automated Invoice Data Extraction & Validation</p>
+      </header>
+      
+      <main class="app-main">
+        <!-- Step 1: Upload PDF -->
+        <section id="step-upload" class="card active">
+          <div class="card-header">
+            <span class="step-badge">Step 1</span>
+            <h2>Document Upload</h2>
+          </div>
+          <div class="card-body">
+            <p>Upload an invoice to simulate automated accounting entity extraction and verification.</p>
+            <div class="upload-zone">
+               <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+               <p>Select a demo file below</p>
+               <div class="demo-actions">
+                  <button id="btn-demo-correct" class="btn btn-primary">Demo Correct Invoice</button>
+                  <button id="btn-demo-incorrect" class="btn btn-secondary">Demo Incorrect Invoice</button>
+               </div>
+            </div>
+            <div id="upload-loader" class="loader-container hidden">
+              <div class="spinner"></div>
+              <p>Extracting data using AI model...</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Step 2: Extracted Values -->
+        <section id="step-extracted" class="card hidden">
+          <div class="card-header">
+            <span class="step-badge">Step 2</span>
+            <h2>Extracted Values</h2>
+          </div>
+          <div class="card-body">
+            <div class="file-summary">
+              <span class="file-name" id="display-file-name">invoice_XYZ.pdf</span>
+              <button id="btn-re-upload" class="btn btn-text">Upload Another</button>
+            </div>
+            
+            <div class="extracted-grid" id="extracted-fields-container">
+              <!-- Rendered via JS -->
+            </div>
+            
+            <div class="action-footer">
+              <button id="btn-run-audit" class="btn btn-primary">Run Validation Audit</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Step 3: Audit Result -->
+        <section id="step-audit" class="card hidden">
+          <div class="card-header">
+            <span class="step-badge">Step 3</span>
+            <h2>Audit Result</h2>
+          </div>
+          <div class="card-body">
+            <div id="audit-loading" class="loader-container hidden">
+              <div class="spinner"></div>
+              <p>Running compliance checks...</p>
+            </div>
+            
+            <div id="audit-results-container" class="hidden">
+              <div class="summary-box" id="final-summary-card">
+                <h3 id="automation-result-text">Automation result: Processing...</h3>
+              </div>
+              
+              <ul class="audit-list" id="audit-list-container">
+                <!-- Rendered via JS -->
+              </ul>
+              
+              <div class="action-footer">
+                <button id="btn-finish" class="btn btn-outline">Start Over</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
