@@ -42,13 +42,20 @@ export type ShopSummary = {
   neighborhood: string;
   phone: string;
   contactPerson: string;
-  referredBy: string;
   outcome: VisitOutcomeValue;
-  images: string[];
   previewImageUrl: string | null;
   location: CapturedLocation | null;
   createdAt: number;
   updatedAt: number;
+};
+
+export type ShopMapPin = {
+  _id: Id<"shops">;
+  category: string;
+  name: string;
+  phone: string;
+  location: CapturedLocation | null;
+  createdAt: number;
 };
 
 export type ShopDetail = {

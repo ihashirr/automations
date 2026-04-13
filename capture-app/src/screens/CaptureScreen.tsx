@@ -1,7 +1,16 @@
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import { useIsFocused } from "@react-navigation/native";
 import { useQuery } from "convex/react";
-import { startTransition, useEffect, useMemo, useRef, useState, ReactNode } from "react";
+import {
+  ReactNode,
+  startTransition,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -88,6 +97,7 @@ function isDraftPristine(draft: ShopDraft) {
 }
 
 export function CaptureScreen() {
+  const isFocused = useIsFocused();
   const {
     activeCategoryId,
     activeCategoryLabel,
@@ -116,11 +126,24 @@ export function CaptureScreen() {
   const referredByRef = useRef<TextInput>(null);
   const nameRef = useRef<TextInput>(null);
   const duplicateNeighborhood = draft.neighborhood || draft.location?.formattedAddress.split(",")[0]?.trim() || "";
-  const remoteDuplicates = useQuery(api.shops.findPotentialDuplicates, {
-    name: draft.name,
-    neighborhood: duplicateNeighborhood,
-    phone: draft.phone,
-  });
+  const deferredDuplicateName = useDeferredValue(draft.name);
+  const deferredDuplicatePhone = useDeferredValue(draft.phone);
+  const deferredDuplicateNeighborhood = useDeferredValue(duplicateNeighborhood);
+  const shouldCheckRemoteDuplicates =
+    isFocused &&
+    (sanitizePhoneInput(deferredDuplicatePhone).length >= 5 ||
+      (normalizeText(deferredDuplicateName).length >= 3 &&
+        normalizeText(deferredDuplicateNeighborhood).length >= 2));
+  const remoteDuplicates = useQuery(
+    api.shops.findPotentialDuplicates,
+    shouldCheckRemoteDuplicates
+      ? {
+          name: deferredDuplicateName,
+          neighborhood: deferredDuplicateNeighborhood,
+          phone: deferredDuplicatePhone,
+        }
+      : "skip",
+  );
   const localDuplicates = useMemo<DuplicateCandidate[]>(() => {
     const normalizedName = normalizeText(draft.name).toLowerCase();
     const normalizedNeighborhood = normalizeText(duplicateNeighborhood).toLowerCase();

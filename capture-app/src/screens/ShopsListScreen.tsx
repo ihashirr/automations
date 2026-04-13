@@ -3,6 +3,7 @@ import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import {
   CompositeNavigationProp,
   useFocusEffect,
+  useIsFocused,
   useNavigation,
 } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -69,6 +70,7 @@ const categoryIcons = {
 } as const;
 
 export function ShopsListScreen() {
+  const isFocused = useIsFocused();
   const navigation = useNavigation<DashboardNavigation>();
   const moveShop = useMutation(api.shops.moveShop);
   const {
@@ -102,7 +104,10 @@ export function ShopsListScreen() {
     () => getMissionCategories(activeMissionId),
     [activeMissionId, getMissionCategories],
   );
-  const feed = useQuery(api.shops.listMissionFeed, { mission: activeMissionLabel, limit: 200 });
+  const feed = useQuery(
+    api.shops.listMissionFeed,
+    isFocused ? { mission: activeMissionLabel, limit: 200 } : "skip",
+  );
 
   useEffect(() => {
     setActiveNeighborhood(null);
@@ -238,7 +243,7 @@ export function ShopsListScreen() {
       });
   }, [activeNeighborhood, categoryRows, currentLocation, normalizedSearch, sortMode]);
 
-  const isLoading = !queueReady || feed === undefined;
+  const isLoading = !queueReady || (isFocused && feed === undefined);
 
   async function handleMoveLead(missionLabel: string, categoryLabel: string) {
     if (!selectedLead) return;

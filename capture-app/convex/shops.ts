@@ -192,6 +192,25 @@ async function resolveImageUrls(ctx: QueryCtx, shop: Doc<"shops">) {
   return legacyUrls.filter((imageUrl): imageUrl is string => imageUrl !== null);
 }
 
+async function resolvePreviewImageUrl(ctx: QueryCtx, shop: Doc<"shops">) {
+  if (!shop.images) {
+    return shop.imageUrls?.map((imageUrl) => imageUrl.trim()).find(Boolean) ?? null;
+  }
+
+  if (shop.images.length === 0) {
+    return null;
+  }
+
+  const [firstImage] = shop.images;
+
+  if (typeof firstImage === "string") {
+    const trimmed = firstImage.trim();
+    return trimmed || null;
+  }
+
+  return await ctx.storage.getUrl(firstImage);
+}
+
 function extractNeighborhoodFromNominatim(payload: NominatimReverseResponse | null) {
   const address = payload?.address;
 
@@ -249,7 +268,6 @@ function toSearchTextInput(shop: {
 }
 
 async function toShopSummary(ctx: QueryCtx, shop: Doc<"shops">) {
-  const images = await resolveImageUrls(ctx, shop);
   const location = resolveLocation(shop);
   const neighborhood = resolveNeighborhood(shop, location);
 
@@ -262,13 +280,24 @@ async function toShopSummary(ctx: QueryCtx, shop: Doc<"shops">) {
     neighborhood,
     phone: shop.phone,
     contactPerson: shop.contactPerson,
-    referredBy: shop.referredBy,
     outcome: resolveOutcome(shop),
-    images,
-    previewImageUrl: images[0] ?? null,
+    previewImageUrl: await resolvePreviewImageUrl(ctx, shop),
     location,
     createdAt: shop.createdAt,
     updatedAt: shop.updatedAt ?? shop.createdAt,
+  };
+}
+
+function toMapPin(shop: Doc<"shops">) {
+  const location = resolveLocation(shop);
+
+  return {
+    _id: shop._id,
+    category: resolveCategory(shop),
+    name: shop.name,
+    phone: shop.phone,
+    location,
+    createdAt: shop.createdAt,
   };
 }
 
@@ -445,6 +474,11 @@ export const moveShop = mutation({
 
     const mission = normalizeMission(args.mission);
     const category = normalizeCategory(args.category);
+
+    if (resolveMission(shop) === mission && resolveCategory(shop) === category) {
+      return;
+    }
+
     const location = resolveLocation(shop);
     const neighborhood = resolveNeighborhood(shop, location);
 
@@ -526,27 +560,48 @@ export const listMissionFeed = query({
   },
   handler: async (ctx, args) => {
     const mission = normalizeMission(args.mission);
+    const limit = Math.max(1, Math.min(args.limit, MAX_FEED_RESULTS));
+    const shops = await ctx.db
+      .query("shops")
+      .withIndex("by_mission_and_createdAt", (q) => q.eq("mission", mission))
+      .order("desc")
+      .take(limit);
+
+    return await Promise.all(shops.map((shop) => toShopSummary(ctx, shop)));
+  },
+});
+
+export const listMissionMapPins = query({
+  args: {
+    mission: v.string(),
+    category: v.optional(v.string()),
+    limit: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const mission = normalizeMission(args.mission);
+    const category = args.category ? normalizeCategory(args.category) : null;
+    const limit = Math.max(1, Math.min(args.limit, MAX_FEED_RESULTS));
     const candidateShops = await ctx.db
       .query("shops")
-      .withIndex("by_createdAt")
+      .withIndex("by_mission_and_createdAt", (q) => q.eq("mission", mission))
       .order("desc")
-      .take(MAX_FEED_SCAN);
+      .take(category ? MAX_FEED_SCAN : limit);
 
-    const limitedResults: Doc<"shops">[] = [];
+    const pins = [];
 
     for (const shop of candidateShops) {
-      if (resolveMission(shop) !== mission) {
+      if (category && resolveCategory(shop) !== category) {
         continue;
       }
 
-      limitedResults.push(shop);
+      pins.push(toMapPin(shop));
 
-      if (limitedResults.length >= Math.max(1, Math.min(args.limit, MAX_FEED_RESULTS))) {
+      if (pins.length >= limit) {
         break;
       }
     }
 
-    return await Promise.all(limitedResults.map((shop) => toShopSummary(ctx, shop)));
+    return pins;
   },
 });
 

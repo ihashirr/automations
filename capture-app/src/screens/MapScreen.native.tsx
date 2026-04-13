@@ -1,4 +1,5 @@
 import * as Location from "expo-location";
+import { useIsFocused } from "@react-navigation/native";
 import { useQuery } from "convex/react";
 import { LocateFixed, Navigation, Phone, Target } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
@@ -14,7 +15,7 @@ import { buildDialLink } from "../lib/format";
 import { playSelectionHaptic } from "../lib/haptics";
 import { getLocationLabel, resolveLocationDetails } from "../lib/location";
 import { openLocationInMaps } from "../lib/maps";
-import { CapturedLocation } from "../types/shops";
+import { CapturedLocation, ShopMapPin } from "../types/shops";
 
 type LeadPin = {
   id: string;
@@ -32,6 +33,7 @@ const DEFAULT_REGION: Region = {
 };
 
 export function MapScreen() {
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { activeCategoryLabel, activeMissionLabel } = useMissionControl();
   const { pendingCaptures } = useCaptureQueue();
@@ -39,10 +41,16 @@ export function MapScreen() {
   const [isLocating, setIsLocating] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LeadPin | null>(null);
 
-  const feed = useQuery(api.shops.listMissionFeed, {
-    mission: activeMissionLabel,
-    limit: 200,
-  });
+  const feed = useQuery(
+    api.shops.listMissionMapPins,
+    isFocused
+      ? {
+          mission: activeMissionLabel,
+          category: activeCategoryLabel ?? undefined,
+          limit: 200,
+        }
+      : "skip",
+  );
 
   useEffect(() => {
     void refreshCurrentLocation();
@@ -50,9 +58,8 @@ export function MapScreen() {
 
   const pins = useMemo(() => {
     const livePins = (feed ?? [])
-      .filter((shop) => !activeCategoryLabel || shop.category === activeCategoryLabel)
       .filter((shop) => shop.location)
-      .map<LeadPin>((shop) => ({
+      .map<LeadPin>((shop: ShopMapPin) => ({
         id: shop._id,
         location: shop.location as CapturedLocation,
         name: shop.name,
