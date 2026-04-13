@@ -4,11 +4,12 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Accounting Automation Demo</title>
-    <!-- Google Fonts: Inter -->
+    <title>AuditBot — Intelligent Invoice Automation</title>
+    <meta name="description" content="Enterprise-grade automated invoice extraction, validation, and compliance audit platform." />
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- PDF.js library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -17,147 +18,226 @@
     </script>
   </head>
   <body>
-    <div class="app-container">
-      <header class="app-header">
-        <h1>AuditBot Demo</h1>
-        <p class="subtitle">Automated Invoice Data Extraction & Validation</p>
-      </header>
-      
-      <main class="app-main">
-        <!-- KPI Banner -->
-        <div class="kpi-banner">
-          <div class="kpi-card">
-            <span class="kpi-label">Documents Processed</span>
-            <span class="kpi-value" id="kpi-processed">--</span>
+    <div class="app-shell">
+
+      <!-- Top Navbar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="logo-mark">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5Z"/><path d="M6 9.01V9"/><path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19"/></svg>
           </div>
-          <div class="kpi-card">
-            <span class="kpi-label">Auto-Approved</span>
-            <span class="kpi-value kpi-success" id="kpi-passed">--</span>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-label">Needs Review</span>
-            <span class="kpi-value kpi-warning" id="kpi-review">--</span>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-label">Est. Hours Saved</span>
-            <span class="kpi-value" id="kpi-saved">--</span>
+          <div class="logo-text">
+            <span class="brand-name">AuditBot</span>
+            <span class="brand-edition">Enterprise</span>
           </div>
         </div>
+        <div class="topbar-right">
+          <button id="btn-add-files" class="topbar-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Files
+          </button>
+          <button id="btn-export-csv" class="topbar-btn btn-ghost">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
+        </div>
+      </header>
 
-        <!-- Step 1: Upload PDF -->
-        <section id="step-upload" class="card active">
-          <div class="card-header">
-            <span class="step-badge">Step 1</span>
-            <h2>Document Upload</h2>
+      <!-- KPI Strip -->
+      <section class="kpi-strip">
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon-processed">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           </div>
-          <div class="card-body">
-            <p class="premium-promise">Review invoices in seconds, not hours.</p>
-            
-            <div class="upload-zone" id="upload-zone-area">
-               <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-               <h3 style="margin-bottom: 8px;">Drag & Drop your PDF here</h3>
-               <p style="margin-bottom: 4px; color: var(--text-muted); font-size: 14px;">PDF invoices, digital PDFs work best.</p>
-               <p style="margin-bottom: 16px; font-size: 11px; color: var(--text-muted);">Processed entirely locally in your browser for this demo.</p>
-               <input type="file" id="real-file-upload" accept="application/pdf" style="display: none;" />
-               <button id="btn-browse-files" class="btn btn-primary">Browse Files</button>
+          <div class="kpi-body">
+            <span class="kpi-label">Documents Processed</span>
+            <div class="kpi-row">
+              <span class="kpi-value" id="kpi-processed">--</span>
             </div>
-            
-            <div class="demo-samples-area">
-               <span class="text-sm">Don't have a file ready? Try sample documents:</span>
-               <div class="demo-actions">
-                  <button id="btn-demo-correct" class="btn btn-secondary btn-sm">Mock Correct Invoice</button>
-                  <button id="btn-demo-incorrect" class="btn btn-secondary btn-sm">Mock Incorrect Invoice</button>
-               </div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon-approved">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="kpi-body">
+            <span class="kpi-label">Auto-Approved</span>
+            <div class="kpi-row">
+              <span class="kpi-value kpi-val-success" id="kpi-passed">--</span>
+              <span class="kpi-pct" id="kpi-pct-passed"></span>
             </div>
+            <div class="kpi-bar-track"><div class="kpi-bar-fill kpi-bar-success" id="kpi-bar-passed"></div></div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon-review">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <div class="kpi-body">
+            <span class="kpi-label">Needs Review</span>
+            <div class="kpi-row">
+              <span class="kpi-value kpi-val-warning" id="kpi-review">--</span>
+              <span class="kpi-pct" id="kpi-pct-review"></span>
+            </div>
+            <div class="kpi-bar-track"><div class="kpi-bar-fill kpi-bar-warning" id="kpi-bar-review"></div></div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon-saved">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="kpi-body">
+            <span class="kpi-label">Est. Hours Saved</span>
+            <div class="kpi-row">
+              <span class="kpi-value" id="kpi-saved">--</span>
+              <span class="kpi-benchmark">vs ~2.5h manual</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            <div id="upload-loader" class="loader-container hidden">
-              <div class="spinner"></div>
-              <p id="extraction-status-text">Extracting data using AI model...</p>
+      <!-- Upload Screen -->
+      <section id="step-upload" class="upload-screen active">
+        <div class="upload-hero">
+          <div class="upload-zone" id="upload-zone-area">
+            <div class="upload-icon-wrap">
+              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <h2 class="upload-heading">Drop invoices here to begin audit</h2>
+            <p class="upload-sub">Drag multiple PDF invoices, or click to browse. Digital PDFs work best.</p>
+            <input type="file" id="real-file-upload" accept="application/pdf" multiple style="display: none;" />
+            <button id="btn-browse-files" class="btn btn-accent">Browse Files</button>
+            <p class="upload-privacy">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Processed entirely in your browser. No data leaves your device.
+            </p>
+          </div>
+          <div class="upload-samples">
+            <span class="samples-label">No files? Try sample invoices:</span>
+            <div class="samples-btns">
+              <button id="btn-demo-correct" class="btn btn-ghost-sm">✓ Valid Invoice</button>
+              <button id="btn-demo-incorrect" class="btn btn-ghost-sm">✗ Mismatched Invoice</button>
+            </div>
+          </div>
+        </div>
+        <div id="upload-loader" class="loader-container hidden">
+          <div class="spinner"></div>
+          <p id="extraction-status-text">Extracting data…</p>
+        </div>
+      </section>
+
+      <!-- Workspace (3-column) -->
+      <div id="panel-layout" class="workspace hidden">
+
+        <!-- Left: Batch Queue -->
+        <aside class="ws-queue">
+          <div class="panel">
+            <div class="panel-head">
+              <h3>Queue</h3>
+              <span id="queue-progress-text" class="panel-head-sub">0 / 0</span>
+            </div>
+            <div class="queue-filters">
+              <button class="chip active" data-filter="all">All</button>
+              <button class="chip" data-filter="pass">Passed</button>
+              <button class="chip" data-filter="review">Review</button>
+              <button class="chip" data-filter="fail">Failed</button>
+            </div>
+            <div class="queue-list" id="queue-list-container">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </aside>
+
+        <!-- Center: Document Preview -->
+        <section class="ws-preview">
+          <div class="panel panel-preview">
+            <div class="panel-head">
+              <h3>Source Document</h3>
+              <span class="panel-head-sub" id="preview-doc-name">—</span>
+            </div>
+            <div id="pdf-preview-container" class="preview-container">
+              <iframe id="pdf-iframe" src="" width="100%" height="100%" style="border:none;"></iframe>
             </div>
           </div>
         </section>
 
-        <!-- Dynamic UI Area (Will show side-by-side on larger screens) -->
-        <div id="panel-layout" class="hidden">
-           
-           <div class="preview-panel">
-             <div class="card" style="height: 100%;">
-                <div class="card-header">
-                   <h2>Document Preview</h2>
-                </div>
-                <!-- PDF Render Canvas/Iframe via object tag -->
-                <div id="pdf-preview-container" class="preview-container">
-                   <iframe id="pdf-iframe" src="" width="100%" height="100%" style="border:none;"></iframe>
-                </div>
-             </div>
-           </div>
-           
-           <div class="data-panel">
-               <!-- Step 2: Extracted Values -->
-              <section id="step-extracted" class="card hidden">
-                <div class="card-header">
-                  <span class="step-badge">Step 2</span>
-                  <h2>Extracted Values</h2>
-                </div>
-                <div class="card-body">
-                  <div class="file-summary">
-                    <span class="file-name" id="display-file-name">filename.pdf</span>
-                    <button id="btn-re-upload" class="btn btn-text">Upload Another</button>
-                  </div>
-                  
-                  <div class="extracted-grid" id="extracted-fields-container">
-                    <!-- Rendered via JS -->
-                  </div>
-                  
-                  <div class="action-footer">
-                    <button id="btn-run-audit" class="btn btn-primary">Run Validation Audit</button>
-                  </div>
-                </div>
-              </section>
-      
-              <!-- Step 3: Audit Result -->
-              <section id="step-audit" class="card hidden">
-                <div class="card-header">
-                  <span class="step-badge">Step 3</span>
-                  <h2>Audit Result</h2>
-                </div>
-                <div class="card-body">
-                  <div id="audit-loading" class="loader-container hidden">
-                    <div class="spinner"></div>
-                    <p>Running compliance checks...</p>
-                  </div>
-                  
-                  <div id="audit-results-container" class="hidden">
-                    <div class="summary-box" id="final-summary-card">
-                      <h3 id="automation-result-text">Automation result: Processing...</h3>
-                    </div>
-                    
-                    <div class="metadata-grid">
-                      <div class="meta-item"><span class="meta-label">Confidence</span><span class="meta-val" id="meta-confidence">--</span></div>
-                      <div class="meta-item"><span class="meta-label">Currency</span><span class="meta-val" id="meta-currency">--</span></div>
-                      <div class="meta-item"><span class="meta-label">Audit Time</span><span class="meta-val" id="meta-time">--</span></div>
-                      <div class="meta-item"><span class="meta-label">Rules Run</span><span class="meta-val" id="meta-rules">--</span></div>
-                    </div>
-                    
-                    <div class="evidence-section">
-                      <h4>Evidence trail</h4>
-                      <ul class="audit-list" id="audit-list-container">
-                        <!-- Rendered via JS -->
-                      </ul>
-                    </div>
-                    
-                    <div class="action-footer">
-                      <button id="btn-finish" class="btn btn-outline">Start Over</button>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            
-           </div>
-           
-        </div>
+        <!-- Right: Results -->
+        <section class="ws-results">
 
-      </main>
+          <!-- Extracted Values -->
+          <div id="step-extracted" class="panel hidden">
+            <div class="panel-head">
+              <h3>Extracted Values</h3>
+              <button id="btn-re-upload" class="topbar-btn btn-ghost" style="padding:4px 10px; font-size:12px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add more
+              </button>
+            </div>
+            <div class="panel-body">
+              <span class="file-name-display" id="display-file-name">filename.pdf</span>
+              <div class="extracted-grid" id="extracted-fields-container">
+                <!-- Rendered via JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Audit Result -->
+          <div id="step-audit" class="panel hidden">
+            <div class="panel-head">
+              <h3>Validation Result</h3>
+            </div>
+            <div class="panel-body">
+              <div id="audit-loading" class="loader-container hidden">
+                <div class="spinner"></div>
+                <p>Running compliance checks…</p>
+              </div>
+
+              <div id="audit-results-container" class="hidden">
+                <!-- Status Hero -->
+                <div class="status-hero" id="final-summary-card">
+                  <div class="status-icon-wrap" id="status-icon-wrap">
+                    <!-- JS injects icon -->
+                  </div>
+                  <h3 id="automation-result-text">Processing…</h3>
+                  <p class="status-oneliner" id="status-oneliner"></p>
+                </div>
+
+                <!-- Meta Pills -->
+                <div class="meta-pills">
+                  <div class="pill"><span class="pill-label">Confidence</span><span class="pill-val" id="meta-confidence">--</span></div>
+                  <div class="pill"><span class="pill-label">Currency</span><span class="pill-val" id="meta-currency">--</span></div>
+                  <div class="pill"><span class="pill-label">Audited</span><span class="pill-val" id="meta-time">--</span></div>
+                  <div class="pill"><span class="pill-label">Rules</span><span class="pill-val" id="meta-rules">--</span></div>
+                </div>
+
+                <!-- Validation Table -->
+                <div class="evidence-section">
+                  <h4>Validation Checks</h4>
+                  <table class="audit-table" id="audit-table-container">
+                    <thead>
+                      <tr><th>Check</th><th>Formula</th><th>Result</th><th></th></tr>
+                    </thead>
+                    <tbody id="audit-table-body">
+                      <!-- Rendered via JS -->
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Evidence Trail -->
+                <div class="evidence-section">
+                  <h4>Evidence Trail</h4>
+                  <ul class="evidence-log" id="audit-list-container">
+                    <!-- Rendered via JS -->
+                  </ul>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        </section>
+      </div>
+
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

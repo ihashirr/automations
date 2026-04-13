@@ -2,11 +2,13 @@
 import './style.css';
 import { simulateExtraction, extractFromPdf } from './extraction.js';
 import { runAuditChecks, getOverallStatus } from './validation.js';
-import { dom, showStep, renderExtractedData, renderAuditResults, showLoader, updateKPIs } from './render.js';
+import { dom, showStep, renderExtractedData, renderAuditResults, showLoader, updateKPIs, renderQueue } from './render.js';
 
-let currentSessionData = null;
+let documentsQueue = [];
+let selectedDocId = null;
+let currentFilter = 'all';
 
-// Simulated historical data
+// Simulated historical data — feels like a live system
 let globalMetrics = {
   processed: 1420,
   passed: 1305,
@@ -15,25 +17,22 @@ let globalMetrics = {
 };
 
 function bindEvents() {
-  // Step 1: Upload options
-
-  // Mock processing
-  dom.buttons.demoCorrect.addEventListener('click', () => handleMockUpload('correct'));
-  dom.buttons.demoIncorrect.addEventListener('click', () => handleMockUpload('incorrect'));
-
-  // Real Upload
+  // Browse Files button in upload screen
   dom.inputs.browseFilesBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     dom.inputs.realFileUpload.click();
   });
+  // Click anywhere in upload zone
   dom.inputs.uploadZoneArea.addEventListener('click', (e) => {
-    if (e.target === dom.inputs.realFileUpload) return;
+    if (e.target === dom.inputs.realFileUpload || e.target.closest('.btn')) return;
     dom.inputs.realFileUpload.click();
   });
   
+  // File input change (multi-file)
   dom.inputs.realFileUpload.addEventListener('change', async (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleRealUpload(e.target.files[0]);
+      handleFiles(Array.from(e.target.files));
+      e.target.value = ''; // allow re-selecting same files
     }
   });
 
@@ -50,108 +49,199 @@ function bindEvents() {
     e.preventDefault();
     dom.inputs.uploadZoneArea.classList.remove('dragover');
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-       const file = e.dataTransfer.files[0];
-       if (file.type === "application/pdf") {
-          handleRealUpload(file);
-       } else {
-          alert("Please drop a valid PDF file.");
-       }
+       handleFiles(Array.from(e.dataTransfer.files).filter(f => f.type === "application/pdf"));
     }
   });
 
-  // Step 2: Extracted actions
-  dom.buttons.reUpload.addEventListener('click', () => {
-    currentSessionData = null;
-    dom.layout.pdfIframe.src = "";
-    showStep('upload');
+  // Topbar "Add Files" button→ opens file picker from workspace
+  if (dom.buttons.addFiles) {
+    dom.buttons.addFiles.addEventListener('click', () => {
+      dom.inputs.realFileUpload.click();
+    });
+  }
+
+  // Export CSV
+  if (dom.buttons.exportCsv) {
+    dom.buttons.exportCsv.addEventListener('click', exportToCSV);
+  }
+
+  // Re-upload / Add more from right panel
+  if (dom.buttons.reUpload) {
+    dom.buttons.reUpload.addEventListener('click', () => {
+      dom.inputs.realFileUpload.click();
+    });
+  }
+
+  // Queue click handling (event delegation)
+  dom.queue.list.addEventListener('click', (e) => {
+    const item = e.target.closest('.queue-item');
+    if (item) {
+       selectDocument(item.dataset.id);
+    }
   });
 
-  dom.buttons.runAudit.addEventListener('click', handleRunAudit);
+  // Queue Filter chips
+  const chips = document.querySelectorAll('.chip');
+  chips.forEach(chip => {
+    chip.addEventListener('click', (e) => {
+       chips.forEach(c => c.classList.remove('active'));
+       e.target.classList.add('active');
+       currentFilter = e.target.dataset.filter;
+       renderQueue(documentsQueue, selectedDocId, currentFilter);
+    });
+  });
 
-  // Step 3: Finish action
-  dom.buttons.finish.addEventListener('click', () => {
-    currentSessionData = null;
-    dom.layout.pdfIframe.src = "";
-    // reset UI state
+  // Mock processing (sample buttons)
+  dom.buttons.demoCorrect.addEventListener('click', () => handleMockUpload('correct'));
+  dom.buttons.demoIncorrect.addEventListener('click', () => handleMockUpload('incorrect'));
+}
+
+async function handleFiles(filesArray) {
+  if (filesArray.length === 0) return;
+  
+  const newDocs = filesArray.map(f => ({
+      id: Math.random().toString(36).substr(2, 9),
+      file: f,
+      fileName: f.name,
+      extractedData: null,
+      findings: null,
+      overallStatus: 'loading'
+  }));
+  
+  documentsQueue.push(...newDocs);
+  
+  // Transition to workspace
+  showStep('workspace');
+  renderQueue(documentsQueue, selectedDocId, currentFilter);
+
+  // Process sequentially for demo effect
+  for (let doc of newDocs) {
+     await processDocument(doc.id);
+  }
+}
+
+async function processDocument(id) {
+  const doc = documentsQueue.find(d => d.id === id);
+  if (!doc) return;
+  
+  try {
+     // Small delay for sequential demo flow
+     await new Promise(r => setTimeout(r, 400));
+
+     let extracted;
+     if (doc.type === 'mock') {
+        extracted = await simulateExtraction(doc.mockStatus);
+     } else {
+        extracted = await extractFromPdf(doc.file);
+     }
+
+     const findings = runAuditChecks(extracted.fields);
+     const overall = getOverallStatus(findings);
+     
+     // Update global KPI metrics
+     globalMetrics.processed++;
+     if (overall === 'pass') globalMetrics.passed++;
+     if (overall === 'review' || overall === 'fail') globalMetrics.review++;
+     globalMetrics.timeSavedHours += 0.03; // ~2 min per doc
+     updateKPIs(globalMetrics);
+     
+     // Store results
+     doc.extractedData = extracted;
+     doc.findings = findings;
+     doc.overallStatus = overall;
+     
+  } catch(e) {
+     console.error("Processing failed:", doc.fileName, e);
+     doc.overallStatus = 'fail';
+     doc.findings = [{ title: 'Extraction Error', desc: String(e), status: 'fail' }];
+  }
+  
+  renderQueue(documentsQueue, selectedDocId, currentFilter);
+  
+  // Auto-select first completed document
+  if (!selectedDocId) {
+     selectDocument(id);
+  } else if (selectedDocId === id) {
+     selectDocument(id); // refresh
+  }
+}
+
+function selectDocument(id) {
+  selectedDocId = id;
+  renderQueue(documentsQueue, selectedDocId, currentFilter);
+  
+  const doc = documentsQueue.find(d => d.id === id);
+  if (!doc) return;
+  
+  // Show PDF preview
+  if (doc.file) {
+    if (!doc.previewUrl) {
+       doc.previewUrl = URL.createObjectURL(doc.file);
+    }
+    dom.layout.pdfIframe.src = doc.previewUrl;
+  } else if (doc.type === 'mock') {
+    dom.layout.pdfIframe.src = "about:blank";
+  }
+
+  // Update preview doc name
+  if (dom.previewDocName) dom.previewDocName.textContent = doc.fileName;
+  
+  if (doc.overallStatus === 'loading') {
     dom.auditResultsContainer.classList.add('hidden');
-    showStep('upload');
-  });
-}
-
-async function handleMockUpload(type) {
-  prepUploadUI("Extracting demo data...");
-  try {
-    currentSessionData = await simulateExtraction(type);
-    completeUploadPhase();
-  } catch (error) {
-    console.error(error);
-    restoreUploadUI();
-  }
-}
-
-async function handleRealUpload(file) {
-  prepUploadUI("Extracting via PDF.js...");
-  try {
-    // Generate an object URL for the IFrame preview
-    const fileURL = URL.createObjectURL(file);
-    dom.layout.pdfIframe.src = fileURL;
-
-    // Run actual extraction
-    currentSessionData = await extractFromPdf(file);
-    completeUploadPhase();
-    
-  } catch(error) {
-    console.error(error);
-    alert("Extraction failed: " + error);
-    restoreUploadUI();
-  }
-}
-
-function prepUploadUI(statusMessage) {
-  const actionsZone = document.querySelector('.demo-samples-area');
-  const uploadZone = document.querySelector('.upload-zone');
-  actionsZone.style.display = 'none';
-  uploadZone.style.display = 'none';
-  dom.statusText.textContent = statusMessage;
-  showLoader(dom.uploadLoader, true);
-}
-
-function restoreUploadUI() {
-  const actionsZone = document.querySelector('.demo-samples-area');
-  const uploadZone = document.querySelector('.upload-zone');
-  showLoader(dom.uploadLoader, false);
-  actionsZone.style.display = 'block';
-  uploadZone.style.display = 'block';
-}
-
-function completeUploadPhase() {
-  renderExtractedData(currentSessionData);
-  showStep('extracted');
-  restoreUploadUI(); // reset for next time
-}
-
-function handleRunAudit() {
-  showStep('audit');
-  dom.auditResultsContainer.classList.add('hidden');
-  showLoader(dom.auditLoading, true);
-
-  // simulate calculation delay
-  setTimeout(() => {
-    const findings = runAuditChecks(currentSessionData.fields);
-    const overallStatus = getOverallStatus(findings);
-    
-    // Update KPI metrics
-    globalMetrics.processed++;
-    if (overallStatus === 'pass') globalMetrics.passed++;
-    if (overallStatus === 'review') globalMetrics.review++;
-    globalMetrics.timeSavedHours += 0.05; // 3 mins per doc
-    updateKPIs(globalMetrics);
-    
-    renderAuditResults(findings, overallStatus, currentSessionData.fields.currencySymbol);
-    
-    showLoader(dom.auditLoading, false);
+    dom.extractedGrid.innerHTML = '<p style="padding: 20px; color: var(--text-muted); font-size: 13px;">Extracting data…</p>';
+    dom.fileNameDisplay.textContent = doc.fileName;
+  } else {
     dom.auditResultsContainer.classList.remove('hidden');
-  }, 1000);
+    renderExtractedData(doc.extractedData);
+    renderAuditResults(doc.findings, doc.overallStatus, doc.extractedData?.fields);
+  }
+}
+
+async function handleMockUpload(mockStatus) {
+   const newDoc = {
+      id: Math.random().toString(36).substr(2, 9),
+      file: null,
+      type: 'mock',
+      mockStatus: mockStatus,
+      fileName: mockStatus === 'correct' ? 'sample_valid_invoice.pdf' : 'sample_mismatched.pdf',
+      extractedData: null,
+      findings: null,
+      overallStatus: 'loading'
+   };
+   documentsQueue.push(newDoc);
+   
+   showStep('workspace');
+   renderQueue(documentsQueue, selectedDocId, currentFilter);
+   await processDocument(newDoc.id);
+}
+
+function exportToCSV() {
+  if (documentsQueue.length === 0) return;
+  
+  const headers = ['File', 'Invoice #', 'Date', 'Subtotal', 'VAT', 'Total', 'Currency', 'Status', 'Confidence'];
+  const rows = documentsQueue.filter(d => d.overallStatus !== 'loading').map(d => {
+    const f = d.extractedData?.fields || {};
+    return [
+      d.fileName,
+      f.invoiceNumber || '',
+      f.invoiceDate || '',
+      f.subtotal?.toFixed(2) || '',
+      f.vatAmount?.toFixed(2) || '',
+      f.total?.toFixed(2) || '',
+      f.currencySymbol || '',
+      d.overallStatus,
+      ''
+    ].join(',');
+  });
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `auditbot_results_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // Init
