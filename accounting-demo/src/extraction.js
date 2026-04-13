@@ -43,49 +43,56 @@ function runHeuristics(text) {
   // Normalize text to avoid missing whitespace
   const normalized = text.replace(/\s+/g, ' ');
 
-  // VERY basic regex heuristic logic for demo purposes. 
-  // It covers common structures but is intentionally fragile to trigger "Needs Review" on complex files.
-  
-  // Invoice Number (ignore 'Invoice Date')
-  const invMatch = normalized.match(/Invoice(?!\s+Date)\s*(?:No\.?|#|Number)?[\s:]*([A-Z0-9\-]+)/i);
+  const invoiceNoRegex = /(?:Tax\s*Invoice\s*#|Invoice\s*(?:No|Number|#)\s*:?)[\s#:-]*([A-Z0-9-]+)/i;
+  const invoiceDateRegex = /Invoice\s*Date\s*:?[\s]*([0-9]{1,2}[-\/][A-Za-z]{3}[-\/][0-9]{4}|[0-9]{1,2}[-\/][0-9]{1,2}[-\/][0-9]{2,4})/i;
+  const subtotalRegex = /Subtotal\s*:?[\sA-Z]*([0-9,]+\.\d{2})/i;
+  const vatAmountRegex = /VAT(?:\s*Amount|\s*\(\s*([0-9]{1,2})%\s*\))?\s*:?[\sA-Z]*([0-9,]+\.\d{2})/i;
+  const totalRegex = /Total(?:\s*Amount\s*Payable)?\s*:?[\sA-Z]*([0-9,]+\.\d{2})/i;
+  const currencyRegex = /\b(AED|د\.?إ|Dirham|Dirhams|\$|€|£)\b/i;
+
+  // Currency
+  const currencyMatch = normalized.match(currencyRegex);
+  const currencySymbol = currencyMatch ? currencyMatch[1].toUpperCase() : '$';
+
+  // Invoice Number
+  const invMatch = normalized.match(invoiceNoRegex);
   const invoiceNumber = invMatch ? invMatch[1] : null;
 
   // Invoice Date
-  // looks for Date: Nov 15, 2026 or 15/11/2026 etc
-  const dateMatch = normalized.match(/Date[:\s]*([A-Z0-9\-\/,\s]+)/i);
-  // remove trailing words like "Due" that might get scooped up
-  const invoiceDate = dateMatch ? dateMatch[1].substring(0, 15).replace(/(?:\bDue\b|\bInvoice\b|AED|\$|€).*$/i, '').trim() : null;
+  const dateMatch = normalized.match(invoiceDateRegex);
+  const invoiceDate = dateMatch ? dateMatch[1] : null;
 
-  // Currency extraction helper (use non-greedy match .*? to skip any currency symbol like 'AED ' or '$')
   const extractAmount = (regex) => {
     const match = normalized.match(regex);
     if (match) {
-      // Remove commas and parse to float
-      const val = parseFloat(match[1].replace(/,/g, ''));
+      // The amount is always the last capturing group for total and subtotal.
+      const val = parseFloat(match[match.length - 1].replace(/,/g, ''));
       return isNaN(val) ? null : val;
     }
     return null;
   };
 
-  // Subtotal
-  const subtotal = extractAmount(/Subtotal.*?([0-9,]+\.[0-9]{2})/i);
-  
-  // VAT / Tax
-  const vatAmount = extractAmount(/(?:VAT|Tax).*?([0-9,]+\.[0-9]{2})/i);
-  
-  // Total
-  const total = extractAmount(/(?:Total|Amount Due|Balance Due).*?([0-9,]+\.[0-9]{2})/i);
+  const subtotal = extractAmount(subtotalRegex);
+  const total = extractAmount(totalRegex);
+
+  let vatRate = null;
+  let vatAmount = null;
+  const vatMatch = normalized.match(vatAmountRegex);
+  if (vatMatch) {
+    if (vatMatch[2]) {
+      vatAmount = parseFloat(vatMatch[2].replace(/,/g, ''));
+    }
+    if (vatMatch[1]) {
+      vatRate = parseFloat(vatMatch[1]) / 100;
+    }
+  }
 
   // Derive VAT rate from subtotal and vatAmount
-  let vatRate = null;
-  if (subtotal && vatAmount) {
-    vatRate = parseFloat((vatAmount / subtotal).toFixed(4));
-  } else {
-      // Just try to find a raw percentage like 20%
-      const rateMatch = normalized.match(/([0-9]+(?:\.[0-9]+)?)\s*%/);
-      if (rateMatch) {
-         vatRate = parseFloat(rateMatch[1]) / 100;
-      }
+  if (!vatRate && subtotal && vatAmount) {
+     const computedRate = parseFloat((vatAmount / subtotal).toFixed(4));
+     if (computedRate >= 0 && computedRate < 1) { // generic safety
+         vatRate = computedRate;
+     }
   }
 
   return {
@@ -94,7 +101,8 @@ function runHeuristics(text) {
     subtotal,
     vatRate,
     vatAmount,
-    total
+    total,
+    currencySymbol
   };
 }
 

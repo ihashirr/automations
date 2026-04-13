@@ -22,9 +22,9 @@ export function runAuditChecks(fields) {
 
   if (missing.length > 0) {
     findings.push({
-      title: 'Required Fields Check',
-      desc: `Missing critical fields: ${missing.join(', ')}`,
-      status: 'fail'
+      title: 'Low Confidence Extraction',
+      desc: `Low confidence extraction. Please review values.`,
+      status: 'review'
     });
     // Return early if missing fields because math checks will break
     return findings;

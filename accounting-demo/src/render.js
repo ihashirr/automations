@@ -83,9 +83,10 @@ export function renderExtractedData(data) {
     if (val === null || val === undefined) {
       displayVal = '<span class="missing">Missing</span>';
     } else if (typeof val === 'number') {
-      // rough currency formatting if it's a monetary field
+      // route currency matching based on extracted symbol
       if (key !== 'vatRate') {
-        displayVal = `$${val.toFixed(2)}`;
+        const sym = data.fields.currencySymbol || '';
+        displayVal = `${sym} ${val.toFixed(2)}`.trim();
       } else {
         displayVal = `${(val * 100).toFixed(0)}%`;
       }
