@@ -126,21 +126,59 @@
       <!-- ========== WORKSPACE ========== -->
       <div id="panel-layout" class="workspace hidden">
 
-        <!-- LEFT: Queue -->
+        <!-- LEFT: Smart Triage Rail -->
         <aside class="ws-queue">
-          <div class="panel">
-            <div class="panel-head">
-              <h3>Queue</h3>
-              <span id="queue-progress-text" class="panel-head-sub">0 / 0</span>
+
+          <!-- Queue Summary -->
+          <div class="q-summary">
+            <div class="q-summary-row">
+              <span class="q-summary-label">Queue</span>
+              <span class="q-summary-count" id="queue-progress-text">0 items</span>
             </div>
-            <div class="queue-filters">
-              <button class="chip active" data-filter="all">All</button>
-              <button class="chip" data-filter="pass">Passed</button>
-              <button class="chip" data-filter="review">Review</button>
-              <button class="chip" data-filter="fail">Failed</button>
+            <div class="q-summary-stats" id="queue-summary-stats">
+              <span class="q-stat q-stat-danger" id="q-stat-fail" title="Exceptions">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <span id="q-count-fail">0</span>
+              </span>
+              <span class="q-stat q-stat-warning" id="q-stat-review" title="Needs review">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span id="q-count-review">0</span>
+              </span>
+              <span class="q-stat q-stat-success" id="q-stat-pass" title="Auto-approved">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span id="q-count-pass">0</span>
+              </span>
+              <span class="q-stat q-stat-dim" id="q-stat-loading" title="Processing">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span id="q-count-loading">0</span>
+              </span>
             </div>
-            <div class="queue-list" id="queue-list-container"></div>
           </div>
+
+          <!-- Search + Sort -->
+          <div class="q-toolbar">
+            <div class="q-search-wrap">
+              <svg class="q-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="queue-search" class="q-search" placeholder="Search invoices…" />
+            </div>
+            <select id="queue-sort" class="q-sort">
+              <option value="time">Recent</option>
+              <option value="risk">Risk ↑</option>
+              <option value="amount">Amount ↓</option>
+            </select>
+          </div>
+
+          <!-- Filter Chips -->
+          <div class="queue-filters">
+            <button class="chip active" data-filter="all">All</button>
+            <button class="chip" data-filter="fail">Exceptions</button>
+            <button class="chip" data-filter="review">Review</button>
+            <button class="chip" data-filter="pass">Approved</button>
+          </div>
+
+          <!-- Grouped Queue List -->
+          <div class="queue-list" id="queue-list-container"></div>
+
         </aside>
 
         <!-- CENTER: Tables (the real product surface) -->

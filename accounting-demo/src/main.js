@@ -7,6 +7,8 @@ import { dom, showStep, renderExtractedData, renderAuditResults, showLoader, upd
 let documentsQueue = [];
 let selectedDocId = null;
 let currentFilter = 'all';
+let searchTerm = '';
+let sortMode = 'time';
 let pdfDrawerOpen = false;
 let showOnlyExceptions = false;
 
@@ -81,9 +83,27 @@ function bindEvents() {
       chips.forEach(c => c.classList.remove('active'));
       e.target.classList.add('active');
       currentFilter = e.target.dataset.filter;
-      renderQueue(documentsQueue, selectedDocId, currentFilter);
+      reRenderQueue();
     });
   });
+
+  // Search
+  const searchInput = document.getElementById('queue-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      searchTerm = e.target.value;
+      reRenderQueue();
+    });
+  }
+
+  // Sort
+  const sortSelect = document.getElementById('queue-sort');
+  if (sortSelect) {
+    sortSelect.addEventListener('change', (e) => {
+      sortMode = e.target.value;
+      reRenderQueue();
+    });
+  }
 
   // PDF Drawer toggle
   if (dom.buttons.togglePdf) {
@@ -127,6 +147,10 @@ function filterAuditRows() {
   });
 }
 
+function reRenderQueue() {
+  renderQueue(documentsQueue, selectedDocId, currentFilter, searchTerm, sortMode);
+}
+
 async function handleFiles(filesArray) {
   if (filesArray.length === 0) return;
 
@@ -141,7 +165,7 @@ async function handleFiles(filesArray) {
 
   documentsQueue.push(...newDocs);
   showStep('workspace');
-  renderQueue(documentsQueue, selectedDocId, currentFilter);
+  reRenderQueue();
 
   for (let doc of newDocs) {
     await processDocument(doc.id);
@@ -181,7 +205,7 @@ async function processDocument(id) {
     doc.findings = [{ title: 'Extraction Error', desc: String(e), status: 'fail' }];
   }
 
-  renderQueue(documentsQueue, selectedDocId, currentFilter);
+  reRenderQueue();
 
   if (!selectedDocId) {
     selectDocument(id);
@@ -192,7 +216,7 @@ async function processDocument(id) {
 
 function selectDocument(id) {
   selectedDocId = id;
-  renderQueue(documentsQueue, selectedDocId, currentFilter);
+  reRenderQueue();
 
   const doc = documentsQueue.find(d => d.id === id);
   if (!doc) return;
@@ -232,7 +256,7 @@ async function handleMockUpload(mockStatus) {
   };
   documentsQueue.push(newDoc);
   showStep('workspace');
-  renderQueue(documentsQueue, selectedDocId, currentFilter);
+  reRenderQueue();
   await processDocument(newDoc.id);
 }
 

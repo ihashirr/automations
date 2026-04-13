@@ -247,45 +247,164 @@ export function showLoader(element, show) {
   else element.classList.add('hidden');
 }
 
-export function renderQueue(documents, selectedId, filter = 'all') {
+export function renderQueue(documents, selectedId, filter = 'all', searchTerm = '', sortMode = 'time') {
   dom.queue.list.innerHTML = '';
-  let processed = 0;
 
-  const filtered = documents.filter(d => {
-    if (d.overallStatus !== 'loading') processed++;
-    if (filter === 'all') return true;
-    return d.overallStatus === filter;
+  // Count all statuses (unfiltered)
+  let countPass = 0, countFail = 0, countReview = 0, countLoading = 0;
+  documents.forEach(d => {
+    if (d.overallStatus === 'pass') countPass++;
+    else if (d.overallStatus === 'fail') countFail++;
+    else if (d.overallStatus === 'review') countReview++;
+    else countLoading++;
   });
 
-  dom.queue.progress.textContent = `${processed} / ${documents.length}`;
+  // Update summary stats
+  dom.queue.progress.textContent = `${documents.length} item${documents.length !== 1 ? 's' : ''}`;
+  const setCount = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setCount('q-count-fail', countFail);
+  setCount('q-count-review', countReview);
+  setCount('q-count-pass', countPass);
+  setCount('q-count-loading', countLoading);
+
+  // Filter
+  let filtered = documents;
+  if (filter !== 'all') {
+    filtered = filtered.filter(d => d.overallStatus === filter);
+  }
+
+  // Search
+  if (searchTerm) {
+    const term = searchTerm.toLowerCase();
+    filtered = filtered.filter(d => {
+      const vendor = getVendorName(d);
+      return d.fileName.toLowerCase().includes(term) || vendor.toLowerCase().includes(term);
+    });
+  }
+
+  // Sort
+  if (sortMode === 'risk') {
+    const riskOrder = { fail: 0, review: 1, loading: 2, pass: 3 };
+    filtered.sort((a, b) => (riskOrder[a.overallStatus] ?? 9) - (riskOrder[b.overallStatus] ?? 9));
+  } else if (sortMode === 'amount') {
+    filtered.sort((a, b) => (b.extractedData?.fields?.total || 0) - (a.extractedData?.fields?.total || 0));
+  }
+  // 'time' = original order, no sort needed
+
+  // Group by status
+  const groups = [
+    { key: 'fail', label: 'Exceptions', items: [] },
+    { key: 'review', label: 'Needs Review', items: [] },
+    { key: 'loading', label: 'Processing', items: [] },
+    { key: 'pass', label: 'Auto-Approved', items: [] },
+  ];
 
   filtered.forEach(doc => {
-    const el = document.createElement('div');
-    const statusClass = `status-${doc.overallStatus}`;
-    el.className = `queue-item ${statusClass} ${doc.id === selectedId ? 'active' : ''}`;
-    el.dataset.id = doc.id;
+    const g = groups.find(g => g.key === doc.overallStatus);
+    if (g) g.items.push(doc);
+  });
 
-    let statusLabel = 'Processing…';
-    let statusColorClass = 'q-status-loading';
-    let amountText = '';
+  // Render grouped
+  groups.forEach(group => {
+    if (group.items.length === 0) return;
 
-    if (doc.overallStatus !== 'loading') {
-      if (doc.overallStatus === 'pass') { statusLabel = 'Approved'; statusColorClass = 'q-status-pass'; }
-      else if (doc.overallStatus === 'review') { statusLabel = 'Review'; statusColorClass = 'q-status-review'; }
-      else { statusLabel = 'Failed'; statusColorClass = 'q-status-fail'; }
+    // Section header
+    const header = document.createElement('div');
+    header.className = 'q-section-head';
+    header.innerHTML = `<span>${group.label}</span><span class="q-section-count">${group.items.length}</span>`;
+    dom.queue.list.appendChild(header);
 
+    // Rows
+    group.items.forEach(doc => {
+      const el = document.createElement('div');
+      el.className = `queue-item status-${doc.overallStatus} ${doc.id === selectedId ? 'active' : ''}`;
+      el.dataset.id = doc.id;
+
+      const vendor = getVendorName(doc);
+      const conf = getConfidence(doc);
+      const confClass = conf >= 95 ? 'q-conf-high' : (conf >= 80 ? 'q-conf-med' : 'q-conf-low');
+      const reason = getTriageReason(doc);
       const sym = doc.extractedData?.fields?.currencySymbol || '';
       const total = doc.extractedData?.fields?.total;
-      amountText = total != null ? `${sym} ${total.toLocaleString(undefined,{minimumFractionDigits:2})}` : '';
-    }
+      const amountText = total != null ? `${sym} ${total.toLocaleString(undefined,{minimumFractionDigits:2})}` : '';
 
-    el.innerHTML = `
-      <div class="q-title">${doc.fileName}</div>
-      <div class="q-meta">
-        <span>${amountText}</span>
-        <span class="q-status ${statusColorClass}">${statusLabel}</span>
-      </div>
-    `;
-    dom.queue.list.appendChild(el);
+      let badgeLabel, badgeClass;
+      if (doc.overallStatus === 'pass') { badgeLabel = 'Approved'; badgeClass = 'q-badge-pass'; }
+      else if (doc.overallStatus === 'review') { badgeLabel = 'Review'; badgeClass = 'q-badge-review'; }
+      else if (doc.overallStatus === 'fail') { badgeLabel = 'Exception'; badgeClass = 'q-badge-fail'; }
+      else { badgeLabel = 'Processing'; badgeClass = 'q-badge-loading'; }
+
+      el.innerHTML = `
+        <div class="q-row-top">
+          <span class="q-title">${doc.fileName}</span>
+          ${doc.overallStatus !== 'loading' ? `<span class="q-confidence ${confClass}">${conf}%</span>` : ''}
+        </div>
+        <div class="q-vendor">${vendor}</div>
+        <div class="q-row-bottom">
+          <span class="q-amount">${amountText}</span>
+          <span class="q-badge ${badgeClass}">${badgeLabel}</span>
+        </div>
+        ${reason ? `<div class="q-reason">${reason}</div>` : ''}
+      `;
+
+      dom.queue.list.appendChild(el);
+    });
   });
 }
+
+/**
+ * Extracts a simulated vendor name from filename
+ */
+function getVendorName(doc) {
+  if (doc.overallStatus === 'loading') return 'Extracting vendor…';
+  // Try to derive from filename
+  const name = doc.fileName.replace(/\.pdf$/i, '').replace(/[_-]/g, ' ');
+  // Capitalize first letter of each word
+  return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+/**
+ * Simulated per-document confidence
+ */
+function getConfidence(doc) {
+  if (doc.overallStatus === 'loading') return 0;
+  if (doc.overallStatus === 'pass') return Math.floor(Math.random() * 4 + 96); // 96-99
+  if (doc.overallStatus === 'review') return Math.floor(Math.random() * 10 + 80); // 80-89
+  return Math.floor(Math.random() * 25 + 45); // 45-69
+}
+
+/**
+ * Generate a human-readable triage reason from findings
+ */
+function getTriageReason(doc) {
+  if (doc.overallStatus === 'loading') return '';
+  if (!doc.findings || doc.findings.length === 0) return '';
+
+  const passCount = doc.findings.filter(f => f.status === 'pass').length;
+  const failCount = doc.findings.filter(f => f.status === 'fail').length;
+  const reviewCount = doc.findings.filter(f => f.status === 'review').length;
+
+  if (doc.overallStatus === 'pass') {
+    return `${passCount}/${doc.findings.length} checks passed`;
+  }
+
+  // Build specific reason
+  const reasons = [];
+  doc.findings.forEach(f => {
+    if (f.status === 'fail') {
+      if (f.title.includes('VAT')) reasons.push('VAT mismatch');
+      else if (f.title.includes('Total')) reasons.push('Total mismatch');
+      else if (f.title.includes('Extraction') || f.title.includes('Error')) reasons.push('Extraction error');
+      else reasons.push(f.title);
+    } else if (f.status === 'review') {
+      if (f.title.includes('Confidence') || f.title.includes('Low')) reasons.push('Low OCR confidence');
+      else if (f.title.includes('VAT')) reasons.push('VAT rounding');
+      else if (f.title.includes('Total')) reasons.push('Total rounding');
+      else reasons.push(f.title);
+    }
+  });
+
+  if (reasons.length > 0) return reasons.slice(0, 2).join(' · ');
+  return `${failCount} exception${failCount !== 1 ? 's' : ''}, ${reviewCount} review`;
+}
+
