@@ -44,7 +44,8 @@ function runHeuristics(text) {
   const normalized = text.replace(/\s+/g, ' ');
 
   const invoiceNoRegex = /(?:Tax\s*(?:Invoice|Credit\s*Note)\s*#|(?:Invoice|Credit\s*Note)(?!\s+Date)\s*(?:No\.?|Number|#)?\s*:?)[\s#:-]*([A-Z0-9-]+)/i;
-  const invoiceDateRegex = /Invoice\s*Date\s*:?[\s]*([0-9]{1,2}[-\/][A-Za-z]{3}[-\/][0-9]{4}|[0-9]{1,2}[-\/][0-9]{1,2}[-\/][0-9]{2,4})/i;
+  // Broad date parser: Supports DD-MM-YYYY, YYYY-MM-DD, Month DD YYYY, DD Month YYYY, with ordinals (st, nd, rd, th) and various delimiters
+  const invoiceDateRegex = /Invoice\s*Date[\s\S]{0,50}?([0-9]{1,2}(?:st|nd|rd|th)?[-\/\.\s\u2010-\u2015,]+(?:[A-Za-z]{3,10}|[0-9]{1,2})[-\/\.\s\u2010-\u2015,]+[0-9]{2,4}|[0-9]{4}[-\/\.\s\u2010-\u2015,]+(?:[A-Za-z]{3,10}|[0-9]{1,2})[-\/\.\s\u2010-\u2015,]+[0-9]{1,2}(?:st|nd|rd|th)?|[A-Za-z]{3,10}[-\/\.\s\u2010-\u2015,]+[0-9]{1,2}(?:st|nd|rd|th)?[-\/\.\s\u2010-\u2015,]+[0-9]{2,4})/i;
   const subtotalRegex = /Subtotal\s*:?[\sA-Z]*(-?\s*[0-9,]+\.\d{2})/i;
   const vatAmountRegex = /VAT(?:\s*Amount|\s*\(\s*([0-9]{1,2})%\s*\))?\s*:?[\sA-Z]*(-?\s*[0-9,]+\.\d{2})/i;
   const totalRegex = /\bTotal(?:\s*Amount\s*Payable)?\s*:?[\sA-Z]*(-?\s*[0-9,]+\.\d{2})/i;

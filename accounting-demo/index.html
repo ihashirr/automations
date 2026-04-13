@@ -24,6 +24,26 @@
       </header>
       
       <main class="app-main">
+        <!-- KPI Banner -->
+        <div class="kpi-banner">
+          <div class="kpi-card">
+            <span class="kpi-label">Documents Processed</span>
+            <span class="kpi-value" id="kpi-processed">--</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Auto-Approved</span>
+            <span class="kpi-value kpi-success" id="kpi-passed">--</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Needs Review</span>
+            <span class="kpi-value kpi-warning" id="kpi-review">--</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Est. Hours Saved</span>
+            <span class="kpi-value" id="kpi-saved">--</span>
+          </div>
+        </div>
+
         <!-- Step 1: Upload PDF -->
         <section id="step-upload" class="card active">
           <div class="card-header">
@@ -31,12 +51,13 @@
             <h2>Document Upload</h2>
           </div>
           <div class="card-body">
-            <p>Upload a real PDF invoice to verify our live extraction and validation engine.</p>
+            <p class="premium-promise">Review invoices in seconds, not hours.</p>
             
             <div class="upload-zone" id="upload-zone-area">
                <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                <h3 style="margin-bottom: 8px;">Drag & Drop your PDF here</h3>
-               <p style="margin-bottom: 16px;">Or browse from your files</p>
+               <p style="margin-bottom: 4px; color: var(--text-muted); font-size: 14px;">PDF invoices, digital PDFs work best.</p>
+               <p style="margin-bottom: 16px; font-size: 11px; color: var(--text-muted);">Processed entirely locally in your browser for this demo.</p>
                <input type="file" id="real-file-upload" accept="application/pdf" style="display: none;" />
                <button id="btn-browse-files" class="btn btn-primary">Browse Files</button>
             </div>
@@ -111,9 +132,19 @@
                       <h3 id="automation-result-text">Automation result: Processing...</h3>
                     </div>
                     
-                    <ul class="audit-list" id="audit-list-container">
-                      <!-- Rendered via JS -->
-                    </ul>
+                    <div class="metadata-grid">
+                      <div class="meta-item"><span class="meta-label">Confidence</span><span class="meta-val" id="meta-confidence">--</span></div>
+                      <div class="meta-item"><span class="meta-label">Currency</span><span class="meta-val" id="meta-currency">--</span></div>
+                      <div class="meta-item"><span class="meta-label">Audit Time</span><span class="meta-val" id="meta-time">--</span></div>
+                      <div class="meta-item"><span class="meta-label">Rules Run</span><span class="meta-val" id="meta-rules">--</span></div>
+                    </div>
+                    
+                    <div class="evidence-section">
+                      <h4>Evidence trail</h4>
+                      <ul class="audit-list" id="audit-list-container">
+                        <!-- Rendered via JS -->
+                      </ul>
+                    </div>
                     
                     <div class="action-footer">
                       <button id="btn-finish" class="btn btn-outline">Start Over</button>

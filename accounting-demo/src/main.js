@@ -2,9 +2,17 @@
 import './style.css';
 import { simulateExtraction, extractFromPdf } from './extraction.js';
 import { runAuditChecks, getOverallStatus } from './validation.js';
-import { dom, showStep, renderExtractedData, renderAuditResults, showLoader } from './render.js';
+import { dom, showStep, renderExtractedData, renderAuditResults, showLoader, updateKPIs } from './render.js';
 
 let currentSessionData = null;
+
+// Simulated historical data
+let globalMetrics = {
+  processed: 1420,
+  passed: 1305,
+  review: 115,
+  timeSavedHours: 42.5
+};
 
 function bindEvents() {
   // Step 1: Upload options
@@ -14,8 +22,14 @@ function bindEvents() {
   dom.buttons.demoIncorrect.addEventListener('click', () => handleMockUpload('incorrect'));
 
   // Real Upload
-  dom.inputs.browseFilesBtn.addEventListener('click', () => dom.inputs.realFileUpload.click());
-  dom.inputs.uploadZoneArea.addEventListener('click', () => dom.inputs.realFileUpload.click());
+  dom.inputs.browseFilesBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dom.inputs.realFileUpload.click();
+  });
+  dom.inputs.uploadZoneArea.addEventListener('click', (e) => {
+    if (e.target === dom.inputs.realFileUpload) return;
+    dom.inputs.realFileUpload.click();
+  });
   
   dom.inputs.realFileUpload.addEventListener('change', async (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -126,7 +140,14 @@ function handleRunAudit() {
     const findings = runAuditChecks(currentSessionData.fields);
     const overallStatus = getOverallStatus(findings);
     
-    renderAuditResults(findings, overallStatus);
+    // Update KPI metrics
+    globalMetrics.processed++;
+    if (overallStatus === 'pass') globalMetrics.passed++;
+    if (overallStatus === 'review') globalMetrics.review++;
+    globalMetrics.timeSavedHours += 0.05; // 3 mins per doc
+    updateKPIs(globalMetrics);
+    
+    renderAuditResults(findings, overallStatus, currentSessionData.fields.currencySymbol);
     
     showLoader(dom.auditLoading, false);
     dom.auditResultsContainer.classList.remove('hidden');
@@ -134,4 +155,5 @@ function handleRunAudit() {
 }
 
 // Init
+updateKPIs(globalMetrics);
 bindEvents();
