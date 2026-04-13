@@ -6,12 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AuditBot — Intelligent Invoice Automation</title>
     <meta name="description" content="Enterprise-grade automated invoice extraction, validation, and compliance audit platform." />
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- PDF.js library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -126,10 +123,10 @@
         </div>
       </section>
 
-      <!-- Workspace (3-column) -->
+      <!-- ========== WORKSPACE ========== -->
       <div id="panel-layout" class="workspace hidden">
 
-        <!-- Left: Batch Queue -->
+        <!-- LEFT: Queue -->
         <aside class="ws-queue">
           <div class="panel">
             <div class="panel-head">
@@ -142,100 +139,101 @@
               <button class="chip" data-filter="review">Review</button>
               <button class="chip" data-filter="fail">Failed</button>
             </div>
-            <div class="queue-list" id="queue-list-container">
-              <!-- Rendered via JS -->
-            </div>
+            <div class="queue-list" id="queue-list-container"></div>
           </div>
         </aside>
 
-        <!-- Center: Document Preview -->
-        <section class="ws-preview">
-          <div class="panel panel-preview">
-            <div class="panel-head">
-              <h3>Source Document</h3>
-              <span class="panel-head-sub" id="preview-doc-name">—</span>
-            </div>
-            <div id="pdf-preview-container" class="preview-container">
-              <iframe id="pdf-iframe" src="" width="100%" height="100%" style="border:none;"></iframe>
-            </div>
-          </div>
-        </section>
+        <!-- CENTER: Tables (the real product surface) -->
+        <section class="ws-center">
 
-        <!-- Right: Results -->
-        <section class="ws-results">
-
-          <!-- Extracted Values -->
+          <!-- Extracted Fields Table -->
           <div id="step-extracted" class="panel hidden">
             <div class="panel-head">
-              <h3>Extracted Values</h3>
-              <button id="btn-re-upload" class="topbar-btn btn-ghost" style="padding:4px 10px; font-size:12px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add more
-              </button>
+              <h3>Extracted Fields</h3>
+              <span class="panel-head-sub" id="display-file-name">—</span>
             </div>
-            <div class="panel-body">
-              <span class="file-name-display" id="display-file-name">filename.pdf</span>
-              <div class="extracted-grid" id="extracted-fields-container">
-                <!-- Rendered via JS -->
-              </div>
+            <div class="panel-body panel-body-flush">
+              <table class="data-table" id="extracted-table">
+                <thead>
+                  <tr><th>Field</th><th>Source Value</th><th class="col-right">Normalized</th><th class="col-right">Confidence</th></tr>
+                </thead>
+                <tbody id="extracted-table-body"></tbody>
+              </table>
             </div>
           </div>
 
-          <!-- Audit Result -->
+          <!-- Validation Checks Table -->
           <div id="step-audit" class="panel hidden">
             <div class="panel-head">
-              <h3>Validation Result</h3>
+              <h3>Checks Performed</h3>
+              <div class="panel-head-actions">
+                <button class="chip chip-sm" id="btn-show-exceptions">Show only exceptions</button>
+              </div>
             </div>
-            <div class="panel-body">
+            <div class="panel-body panel-body-flush">
               <div id="audit-loading" class="loader-container hidden">
                 <div class="spinner"></div>
                 <p>Running compliance checks…</p>
               </div>
-
               <div id="audit-results-container" class="hidden">
-                <!-- Status Hero -->
-                <div class="status-hero" id="final-summary-card">
-                  <div class="status-icon-wrap" id="status-icon-wrap">
-                    <!-- JS injects icon -->
-                  </div>
-                  <h3 id="automation-result-text">Processing…</h3>
-                  <p class="status-oneliner" id="status-oneliner"></p>
-                </div>
-
-                <!-- Meta Pills -->
-                <div class="meta-pills">
-                  <div class="pill"><span class="pill-label">Confidence</span><span class="pill-val" id="meta-confidence">--</span></div>
-                  <div class="pill"><span class="pill-label">Currency</span><span class="pill-val" id="meta-currency">--</span></div>
-                  <div class="pill"><span class="pill-label">Audited</span><span class="pill-val" id="meta-time">--</span></div>
-                  <div class="pill"><span class="pill-label">Rules</span><span class="pill-val" id="meta-rules">--</span></div>
-                </div>
-
-                <!-- Validation Table -->
-                <div class="evidence-section">
-                  <h4>Validation Checks</h4>
-                  <table class="audit-table" id="audit-table-container">
-                    <thead>
-                      <tr><th>Check</th><th>Formula</th><th>Result</th><th></th></tr>
-                    </thead>
-                    <tbody id="audit-table-body">
-                      <!-- Rendered via JS -->
-                    </tbody>
-                  </table>
-                </div>
-
-                <!-- Evidence Trail -->
-                <div class="evidence-section">
-                  <h4>Evidence Trail</h4>
-                  <ul class="evidence-log" id="audit-list-container">
-                    <!-- Rendered via JS -->
-                  </ul>
-                </div>
-
+                <table class="data-table" id="audit-table-container">
+                  <thead>
+                    <tr><th>Check</th><th>Formula / Rule</th><th>Output</th><th class="col-center">Status</th></tr>
+                  </thead>
+                  <tbody id="audit-table-body"></tbody>
+                </table>
               </div>
             </div>
           </div>
 
+          <!-- Collapsible PDF Drawer -->
+          <div class="pdf-drawer" id="pdf-drawer">
+            <button class="drawer-toggle" id="btn-toggle-pdf">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span id="preview-doc-name">Source Document</span>
+              <svg class="drawer-chevron" id="drawer-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="drawer-body collapsed" id="pdf-drawer-body">
+              <iframe id="pdf-iframe" src="" width="100%" height="100%" style="border:none;"></iframe>
+            </div>
+          </div>
+
         </section>
+
+        <!-- RIGHT: Decision Rail -->
+        <aside class="ws-decision">
+          <div class="panel">
+            <div class="panel-head"><h3>Decision</h3></div>
+            <div class="panel-body">
+              <!-- Status Hero -->
+              <div class="status-hero" id="final-summary-card">
+                <div class="status-icon-wrap" id="status-icon-wrap"></div>
+                <h3 id="automation-result-text">Select a document</h3>
+                <p class="status-oneliner" id="status-oneliner">Upload or select an invoice from the queue.</p>
+              </div>
+              <!-- Meta Pills -->
+              <div class="meta-pills">
+                <div class="pill"><span class="pill-label">Confidence</span><span class="pill-val" id="meta-confidence">--</span></div>
+                <div class="pill"><span class="pill-label">Currency</span><span class="pill-val" id="meta-currency">--</span></div>
+                <div class="pill"><span class="pill-label">Audited</span><span class="pill-val" id="meta-time">--</span></div>
+                <div class="pill"><span class="pill-label">Rules</span><span class="pill-val" id="meta-rules">--</span></div>
+              </div>
+              <!-- Evidence Trail -->
+              <div class="evidence-section">
+                <h4>Evidence Trail</h4>
+                <ul class="evidence-log" id="audit-list-container"></ul>
+              </div>
+              <!-- Actions -->
+              <div class="decision-actions">
+                <button id="btn-re-upload" class="topbar-btn" style="width:100%; justify-content:center;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Add More Files
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
+
       </div>
 
     </div>
