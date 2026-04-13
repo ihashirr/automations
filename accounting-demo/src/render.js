@@ -83,12 +83,7 @@ export function renderAuditResults(findings, overallStatus) {
     const li = document.createElement('li');
     li.className = 'audit-item';
     
-    let icon = '✅';
-    if (f.status === 'fail') icon = '❌';
-    if (f.status === 'review') icon = '⚠️';
-
     li.innerHTML = `
-      <div class="audit-icon">${icon}</div>
       <div class="audit-details">
         <div class="audit-title">${f.title} <span class="status-badge badge-${f.status}">${f.status.toUpperCase()}</span></div>
         <div class="audit-desc">${f.desc}</div>

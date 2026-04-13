@@ -199,10 +199,7 @@ body {
   align-items: center;
   gap: 8px;
 }
-.file-name::before {
-  content: "📁";
-  font-size: 16px;
-}
+
 
 .extracted-grid {
   display: grid;
