@@ -86,7 +86,7 @@ export function ShopCard({
           ) : null}
         </View>
         <Text numberOfLines={1} style={styles.subtext}>
-          {contactPerson || "No Manager"} • {neighborhoodLabel}
+          {contactPerson || "No decision maker"} • {neighborhoodLabel}
         </Text>
         <View style={styles.metaRow}>
           <View style={styles.outcomePill}>

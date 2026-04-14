@@ -14,9 +14,7 @@ import {
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -29,7 +27,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Camera,
-  Check,
   ChevronDown,
   FolderOpen,
   Images,
@@ -41,7 +38,6 @@ import {
 } from "lucide-react-native";
 import { api } from "../../convex/_generated/api";
 import { AppBottomSheet } from "../components/AppBottomSheet";
-import { AppTip } from "../components/AppTip";
 import { CaptureMapPicker } from "../components/CaptureMapPicker";
 import { getVisitOutcomeLabel, visitOutcomeOptions } from "../constants/visit-outcomes";
 import { getMissionDefinition, missionCatalog } from "../constants/missions";
@@ -85,7 +81,9 @@ function createEmptyDraft(mission: string, category: string | null): ShopDraft {
     neighborhood: "",
     phone: "",
     contactPerson: "",
+    role: "",
     referredBy: "",
+    nextStep: "",
     outcome: null,
     images: [],
     location: null,
@@ -93,7 +91,17 @@ function createEmptyDraft(mission: string, category: string | null): ShopDraft {
 }
 
 function isDraftPristine(draft: ShopDraft) {
-  return !draft.name && !draft.phone && !draft.contactPerson && !draft.referredBy && !draft.outcome && !draft.location && draft.images.length === 0;
+  return (
+    !draft.name &&
+    !draft.phone &&
+    !draft.contactPerson &&
+    !(draft.role ?? "") &&
+    !draft.referredBy &&
+    !(draft.nextStep ?? "") &&
+    !draft.outcome &&
+    !draft.location &&
+    draft.images.length === 0
+  );
 }
 
 export function CaptureScreen() {
@@ -114,6 +122,7 @@ export function CaptureScreen() {
   const [draft, setDraft] = useState<ShopDraft>(() => createEmptyDraft(activeMissionLabel, activeCategoryLabel));
   const [flashState, setFlashState] = useState<FlashState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
   const [isResolvingLocation, setIsResolvingLocation] = useState(false);
   const [isPreparingMap, setIsPreparingMap] = useState(false);
   const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
@@ -121,9 +130,10 @@ export function CaptureScreen() {
   const [mapCoordinates, setMapCoordinates] = useState<Coordinates | null>(null);
   const [pickerMissionId, setPickerMissionId] = useState(activeMissionId);
   const [focusedField, setFocusedField] = useState<string | null>(null);
-  const phoneRef = useRef<TextInput>(null);
   const contactRef = useRef<TextInput>(null);
-  const referredByRef = useRef<TextInput>(null);
+  const roleRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const nextStepRef = useRef<TextInput>(null);
   const nameRef = useRef<TextInput>(null);
   const duplicateNeighborhood = draft.neighborhood || draft.location?.formattedAddress.split(",")[0]?.trim() || "";
   const deferredDuplicateName = useDeferredValue(draft.name);
@@ -197,6 +207,11 @@ export function CaptureScreen() {
 
     return [...merged.values()].sort((left, right) => right.createdAt - left.createdAt).slice(0, 3);
   }, [localDuplicates, remoteDuplicates]);
+  const hasPhone = sanitizePhoneInput(draft.phone).length > 0;
+  const missingName = !draft.name.trim();
+  const missingLocation = !draft.location;
+  const missingOutcome = !draft.outcome;
+  const isReadyToSave = !missingName && !missingLocation && !missingOutcome;
 
   useEffect(() => {
     if (!flashState) return;
@@ -226,6 +241,15 @@ export function CaptureScreen() {
     const missionId = missionCatalog.find((mission) => mission.label === draft.mission)?.id ?? activeMissionId;
     setPickerMissionId(missionId);
     setIsFolderPickerOpen(true);
+  }
+
+  function handleNumberToggle(nextState: "got" | "none") {
+    if (nextState === "got") {
+      phoneRef.current?.focus();
+      return;
+    }
+
+    updateField("phone", "");
   }
 
   function applyFolderSelection(missionId: string, categoryId: string) {
@@ -330,6 +354,8 @@ export function CaptureScreen() {
   }
 
   async function persistDraft() {
+    setShowValidation(true);
+
     if (!draft.name.trim()) {
       showFlash("error", "Shop name is required.");
       nameRef.current?.focus();
@@ -349,9 +375,10 @@ export function CaptureScreen() {
       const completedDraft = draft;
       const result = await saveCapture(completedDraft);
       startTransition(() => setDraft(createEmptyDraft(completedDraft.mission, completedDraft.category)));
+      setShowValidation(false);
       nameRef.current?.focus();
       void playMissionAccomplishedHaptic();
-      showFlash(result.status === "saved" ? "success" : "warning", result.status === "saved" ? "Lead saved" : result.reason);
+      showFlash(result.status === "saved" ? "success" : "warning", result.status === "saved" ? "Visit saved" : result.reason);
     } catch (error) {
       showFlash("error", error instanceof Error ? error.message : "Save failed.");
     } finally {
@@ -385,57 +412,201 @@ export function CaptureScreen() {
     await persistDraft();
   }
 
-  const saveDisabled = isSaving || !draft.name.trim() || !draft.location || !draft.outcome;
   const selectedCategoryId = getCategoryIdFromLabel(pickerMissionId, draft.category) ?? (pickerMissionId === activeMissionId ? activeCategoryId : null);
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
       <View style={styles.screen}>
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          
-          <View style={styles.header}>
-            <View style={styles.row}>
-              <View style={styles.badgeLine}>
-                {isOnline ? <SignalHigh color={COLORS.success} size={14} /> : <SignalZero color={COLORS.warning} size={14} />}
-                <Text style={styles.badgeText}>{isOnline ? "Live" : "Queueing"}</Text>
-              </View>
-              {pendingCount > 0 && (
-                <Text style={styles.badgeCount}>{pendingCount} pending</Text>
-              )}
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 156 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={styles.quickStrip}>
+            <View style={styles.syncChip}>
+              {isOnline ? <SignalHigh color={COLORS.success} size={14} /> : <SignalZero color={COLORS.warning} size={14} />}
+              <Text style={styles.syncChipText}>{isOnline ? "Live" : "Queueing"}</Text>
             </View>
-            <Text style={styles.heroTitle}>Quick Visit</Text>
-            <Pressable onPress={() => { void playSelectionHaptic(); openFolderPicker(); }} style={({ pressed }) => [styles.destinationCard, pressed && styles.pressedDestinationCard]}>
-              <View style={styles.destinationIcon}>
-                <FolderOpen color={COLORS.accentStrong} size={18} />
+            {pendingCount > 0 ? (
+              <View style={styles.pendingChip}>
+                <Text style={styles.pendingChipText}>{pendingCount} pending</Text>
               </View>
-              <View style={styles.destinationCopy}>
-                <Text style={styles.destinationLabel}>Saving Into</Text>
-                <Text style={styles.destinationValue}>{draft.mission}</Text>
-                <Text style={styles.destinationMeta}>{draft.category || "Unsorted"} folder</Text>
+            ) : null}
+          </View>
+
+          <View style={styles.priorityCard}>
+            <View style={styles.priorityHeader}>
+              <View style={styles.priorityCopy}>
+                <Text style={styles.eyebrow}>Quick Visit</Text>
+                <Text style={styles.priorityTitle}>Shop & Contact</Text>
               </View>
-              <View style={styles.destinationAction}>
-                <Text style={styles.destinationActionText}>Change</Text>
+              <Pressable onPress={() => { void playSelectionHaptic(); openFolderPicker(); }} style={({ pressed }) => [styles.destinationCard, pressed && styles.pressedDestinationCard]}>
+                <View style={styles.destinationIcon}>
+                  <FolderOpen color={COLORS.accentStrong} size={18} />
+                </View>
+                <View style={styles.destinationCopy}>
+                  <Text numberOfLines={1} style={styles.destinationValue}>{draft.mission}</Text>
+                  <Text numberOfLines={1} style={styles.destinationMeta}>{draft.category || "Unsorted"} folder</Text>
+                </View>
                 <ChevronDown color={COLORS.accentStrong} size={14} />
+              </Pressable>
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>Shop name</Text>
+              <TextInput
+                autoCapitalize="words"
+                autoFocus
+                blurOnSubmit={false}
+                onChangeText={(value) => updateField("name", value)}
+                onBlur={() => setFocusedField(null)}
+                onFocus={() => setFocusedField("name")}
+                onSubmitEditing={() => contactRef.current?.focus()}
+                placeholder="Shop name"
+                placeholderTextColor={COLORS.textMuted}
+                ref={nameRef}
+                returnKeyType="next"
+                style={[
+                  styles.inputHero,
+                  focusedField === "name" && styles.inputFocused,
+                  showValidation && missingName && styles.inputError,
+                ]}
+                value={draft.name}
+              />
+              {showValidation && missingName ? <Text style={styles.inlineError}>Shop name is required.</Text> : null}
+            </View>
+
+            <View style={[styles.locationPanel, showValidation && missingLocation && styles.validationPanel]}>
+              <Text style={styles.fieldLabel}>Area or auto-location</Text>
+              {draft.location ? (
+                <View style={styles.locationFoundBlock}>
+                  <View style={styles.flex}>
+                    <Text style={styles.locationAreaName}>{draft.neighborhood || getLocationLabel(draft.location) || "Pinned location"}</Text>
+                    <Text style={styles.locationSecondary}>{formatCoordinates(draft.location)}</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.emptyLocationRow}>
+                  <MapPinned color={COLORS.textMuted} size={16} />
+                  <Text style={styles.emptyLocationText}>Add the shop location before you move on.</Text>
+                </View>
+              )}
+              <View style={styles.actionRow}>
+                <PrimaryAction
+                  disabled={isResolvingLocation || isPreparingMap}
+                  icon={<Navigation size={16} color={palette.white} />}
+                  label={draft.location ? (isResolvingLocation ? "Refreshing..." : "Refresh GPS") : (isResolvingLocation ? "Locating..." : "Use Current")}
+                  onPress={() => void handleUseCurrentLocation()}
+                />
+                <SecondaryAction
+                  disabled={isResolvingLocation || isPreparingMap}
+                  icon={<MapPinned size={16} color={COLORS.text} />}
+                  label={isPreparingMap ? "Opening..." : "Pin on Map"}
+                  onPress={() => void handleOpenMapPicker()}
+                />
               </View>
-            </Pressable>
-            <AppTip
-              message="Default is quick save into your current folder. Change it only when this visit belongs somewhere else."
-              title="Save Destination"
-            />
+              {showValidation && missingLocation ? <Text style={styles.inlineError}>Location is required.</Text> : null}
+              {draft.location ? (
+                <TextInput
+                  autoCapitalize="words"
+                  onChangeText={(value) => updateField("neighborhood", value)}
+                  onBlur={() => setFocusedField(null)}
+                  onFocus={() => setFocusedField("neighborhood")}
+                  placeholder="Area / landmark"
+                  placeholderTextColor={COLORS.textMuted}
+                  style={[styles.inputDense, focusedField === "neighborhood" && styles.inputFocused]}
+                  value={draft.neighborhood}
+                />
+              ) : null}
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>Decision maker</Text>
+              <TextInput
+                autoCapitalize="words"
+                onChangeText={(value) => updateField("contactPerson", value)}
+                onBlur={() => setFocusedField(null)}
+                onFocus={() => setFocusedField("contactPerson")}
+                onSubmitEditing={() => roleRef.current?.focus()}
+                placeholder="Decision maker name"
+                placeholderTextColor={COLORS.textMuted}
+                ref={contactRef}
+                returnKeyType="next"
+                style={[styles.inputDense, focusedField === "contactPerson" && styles.inputFocused]}
+                value={draft.contactPerson}
+              />
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>Role</Text>
+              <TextInput
+                autoCapitalize="words"
+                onChangeText={(value) => updateField("role", value)}
+                onBlur={() => setFocusedField(null)}
+                onFocus={() => setFocusedField("role")}
+                onSubmitEditing={() => phoneRef.current?.focus()}
+                placeholder="Owner / manager / cashier"
+                placeholderTextColor={COLORS.textMuted}
+                ref={roleRef}
+                returnKeyType="next"
+                style={[styles.inputDense, focusedField === "role" && styles.inputFocused]}
+                value={draft.role ?? ""}
+              />
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <View style={styles.fieldHeaderRow}>
+                <Text style={styles.fieldLabel}>Phone</Text>
+                <View style={styles.toggleRow}>
+                  <Pressable
+                    onPress={() => {
+                      void playSelectionHaptic();
+                      handleNumberToggle("got");
+                    }}
+                    style={({ pressed }) => [
+                      styles.toggleChip,
+                      hasPhone && styles.toggleChipActive,
+                      pressed && !hasPhone && styles.pressedOpacity,
+                    ]}
+                  >
+                    <Text style={[styles.toggleChipText, hasPhone && styles.toggleChipTextActive]}>Got number</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      void playSelectionHaptic();
+                      handleNumberToggle("none");
+                    }}
+                    style={({ pressed }) => [
+                      styles.toggleChip,
+                      !hasPhone && styles.toggleChipMutedActive,
+                      pressed && hasPhone && styles.pressedOpacity,
+                    ]}
+                  >
+                    <Text style={[styles.toggleChipText, !hasPhone && styles.toggleChipTextMutedActive]}>No number</Text>
+                  </Pressable>
+                </View>
+              </View>
+              <TextInput
+                keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
+                onChangeText={(value) => updateField("phone", value)}
+                onBlur={() => setFocusedField(null)}
+                onFocus={() => setFocusedField("phone")}
+                onSubmitEditing={() => nextStepRef.current?.focus()}
+                placeholder="Phone number"
+                placeholderTextColor={COLORS.textMuted}
+                ref={phoneRef}
+                returnKeyType="next"
+                textContentType="telephoneNumber"
+                style={[styles.inputDense, focusedField === "phone" && styles.inputFocused]}
+                value={draft.phone}
+              />
+            </View>
           </View>
 
           {duplicateCandidates.length > 0 ? (
             <View style={styles.duplicateCard}>
               <Text style={styles.duplicateTitle}>Possible duplicate</Text>
-              <Text style={styles.duplicateBody}>
-                This shop may already exist. Review before saving another record.
-              </Text>
+              <Text style={styles.duplicateBody}>Review this before creating another shop record.</Text>
               {duplicateCandidates.map((candidate) => (
                 <View key={`${candidate.source}-${candidate.id}`} style={styles.duplicateRow}>
                   <View style={styles.flex}>
-                    <Text numberOfLines={1} style={styles.duplicateName}>
-                      {candidate.name}
-                    </Text>
+                    <Text numberOfLines={1} style={styles.duplicateName}>{candidate.name}</Text>
                     <Text numberOfLines={1} style={styles.duplicateMeta}>
                       {candidate.neighborhood || "Unknown area"} • {getVisitOutcomeLabel(candidate.outcome)} • {candidate.source === "live" ? "Live" : "Queued"} • {formatCaptureTime(candidate.createdAt)}
                     </Text>
@@ -445,114 +616,11 @@ export function CaptureScreen() {
             </View>
           ) : null}
 
-          <View style={styles.card}>
-            <Text style={styles.eyebrow}>Images</Text>
-            <AppTip
-              message="Capture a quick storefront shot first. It becomes the visual reference for this lead across the app."
-              tone="info"
-            />
-            {draft.images.length === 0 ? (
-              <Pressable onPress={() => { void playSelectionHaptic(); void requestCameraAndCapture(); }} style={({ pressed }) => [styles.captureAreaSmall, pressed && styles.pressedBg]}>
-                <Camera color={COLORS.text} size={28} />
-                <Text style={styles.capturePrimaryText}>Open Camera</Text>
-              </Pressable>
-            ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbnailRow}>
-                <Pressable onPress={() => { void playSelectionHaptic(); void requestCameraAndCapture(); }} style={({ pressed }) => [styles.thumbnailAddTile, pressed && styles.pressedOpacity]}>
-                  <Camera color={COLORS.text} size={24} />
-                </Pressable>
-                {draft.images.map((img, idx) => (
-                  <View key={`${img.localUri}-${idx}`} style={styles.thumbnailFrame}>
-                    <Image source={{ uri: img.localUri }} style={styles.thumbnailImage} />
-                    <Pressable onPress={() => { void playSelectionHaptic(); updateField("images", draft.images.filter((_, i) => i !== idx)); }} style={styles.thumbnailRemove}>
-                      <Trash2 color={COLORS.bg} size={14} />
-                    </Pressable>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-            <Pressable onPress={() => { void playSelectionHaptic(); void requestLibraryAndPick(); }} style={({ pressed }) => [styles.ghostActionRow, pressed && styles.pressedOpacity]}>
-              <Images color={COLORS.textMuted} size={16} />
-              <Text style={styles.ghostActionText}>Choose Images</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.eyebrow}>Business Details</Text>
-            <View style={styles.inputsBlock}>
-              <TextInput
-                autoCapitalize="words"
-                autoFocus
-                blurOnSubmit={false}
-                onChangeText={(value) => updateField("name", value)}
-                onBlur={() => setFocusedField(null)}
-                onFocus={() => setFocusedField("name")}
-                onSubmitEditing={() => phoneRef.current?.focus()}
-                placeholder="Shop Name"
-                placeholderTextColor={COLORS.textMuted}
-                ref={nameRef}
-                returnKeyType="next"
-                style={[styles.inputLarge, focusedField === "name" && styles.inputFocused]}
-                value={draft.name}
-              />
-              <View style={styles.actionRowTight}>
-                <TextInput
-                  keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
-                  onChangeText={(value) => updateField("phone", value)}
-                  onBlur={() => setFocusedField(null)}
-                  onFocus={() => setFocusedField("phone")}
-                  onSubmitEditing={() => contactRef.current?.focus()}
-                  placeholder="Phone"
-                  placeholderTextColor={COLORS.textMuted}
-                  ref={phoneRef}
-                  returnKeyType="next"
-                  textContentType="telephoneNumber"
-                  style={[styles.inputDense, styles.flex, focusedField === "phone" && styles.inputFocused]}
-                  value={draft.phone}
-                />
-                <TextInput
-                  autoCapitalize="words"
-                  onChangeText={(value) => updateField("contactPerson", value)}
-                  onBlur={() => setFocusedField(null)}
-                  onFocus={() => setFocusedField("contactPerson")}
-                  onSubmitEditing={() => referredByRef.current?.focus()}
-                  placeholder="Manager"
-                  placeholderTextColor={COLORS.textMuted}
-                  ref={contactRef}
-                  returnKeyType="next"
-                  style={[styles.inputDense, styles.flex, focusedField === "contactPerson" && styles.inputFocused]}
-                  value={draft.contactPerson}
-                />
-              </View>
-              <TextInput
-                autoCapitalize="words"
-                onChangeText={(value) => updateField("referredBy", value)}
-                onBlur={() => setFocusedField(null)}
-                onFocus={() => setFocusedField("referredBy")}
-                onSubmitEditing={() => Keyboard.dismiss()}
-                placeholder="Referred By"
-                placeholderTextColor={COLORS.textMuted}
-                ref={referredByRef}
-                returnKeyType="done"
-                style={[styles.inputDense, focusedField === "referredBy" && styles.inputFocused]}
-                value={draft.referredBy}
-              />
+          <View style={[styles.card, showValidation && missingOutcome && styles.validationPanel]}>
+            <View style={styles.cardTopRow}>
+              <Text style={styles.eyebrow}>Outcome</Text>
+              <Text style={styles.cardMeta}>{draft.outcome ? getVisitOutcomeLabel(draft.outcome) : "Pick one"}</Text>
             </View>
-          </View>
-
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.eyebrow}>Visit Outcome</Text>
-              <View style={[styles.statusBadge, draft.outcome ? styles.statusConfirmed : styles.statusPending]}>
-                <Text style={[styles.statusBadgeText, draft.outcome ? styles.statusConfirmedText : styles.statusPendingText]}>
-                  {draft.outcome ? "Selected" : "Required"}
-                </Text>
-              </View>
-            </View>
-            <AppTip
-              message="Every visit should end with one clear outcome so you can review the day without guessing what happened."
-              tone="info"
-            />
             <View style={styles.outcomeGrid}>
               {visitOutcomeOptions.map((option) => (
                 <Pressable
@@ -573,85 +641,77 @@ export function CaptureScreen() {
                 </Pressable>
               ))}
             </View>
+            {showValidation && missingOutcome ? <Text style={styles.inlineError}>Outcome is required.</Text> : null}
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>Next step</Text>
+              <TextInput
+                autoCapitalize="sentences"
+                onChangeText={(value) => updateField("nextStep", value)}
+                onBlur={() => setFocusedField(null)}
+                onFocus={() => setFocusedField("nextStep")}
+                placeholder="Call back, revisit, send WhatsApp..."
+                placeholderTextColor={COLORS.textMuted}
+                ref={nextStepRef}
+                returnKeyType="done"
+                style={[styles.inputDense, focusedField === "nextStep" && styles.inputFocused]}
+                value={draft.nextStep ?? ""}
+              />
+            </View>
           </View>
 
           <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.eyebrow}>Location</Text>
-              <View style={[styles.statusBadge, draft.location ? styles.statusConfirmed : styles.statusPending]}>
-                <Text style={[styles.statusBadgeText, draft.location ? styles.statusConfirmedText : styles.statusPendingText]}>
-                  {draft.location ? "Confirmed" : "Pending"}
-                </Text>
-              </View>
+            <View style={styles.cardTopRow}>
+              <Text style={styles.eyebrow}>Photo</Text>
+              <Text style={styles.cardMeta}>Optional</Text>
             </View>
-            <AppTip
-              message="Use current GPS for speed, or open the map when you need to place the lead precisely."
-              tone="info"
-            />
-            
-            {draft.location ? (
-              <View style={styles.locationFoundBlock}>
-                <View style={styles.flex}>
-                  <Text style={styles.locationAreaName}>{draft.neighborhood || getLocationLabel(draft.location) || "Pinned Location"}</Text>
-                  <Text style={styles.locationSecondary}>{formatCoordinates(draft.location)}</Text>
-                </View>
-                <Pressable onPress={() => void handleOpenMapPicker()} style={({ pressed }) => [styles.changeBtn, pressed && styles.pressedOpacity]}>
-                  <Text style={styles.changeBtnText}>Change</Text>
+            {draft.images.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbnailRow}>
+                {draft.images.map((img, idx) => (
+                  <View key={`${img.localUri}-${idx}`} style={styles.thumbnailFrame}>
+                    <Image source={{ uri: img.localUri }} style={styles.thumbnailImage} />
+                    <Pressable onPress={() => { void playSelectionHaptic(); updateField("images", draft.images.filter((_, i) => i !== idx)); }} style={styles.thumbnailRemove}>
+                      <Trash2 color={COLORS.bg} size={14} />
+                    </Pressable>
+                  </View>
+                ))}
+                <Pressable onPress={() => { void playSelectionHaptic(); void requestCameraAndCapture(); }} style={({ pressed }) => [styles.thumbnailAddTile, pressed && styles.pressedOpacity]}>
+                  <Camera color={COLORS.text} size={24} />
                 </Pressable>
-              </View>
+              </ScrollView>
             ) : (
-              <>
-                <View style={styles.emptyLocationRow}>
-                  <MapPinned color={COLORS.textMuted} size={16} />
-                  <Text style={styles.emptyLocationText}>Location not set</Text>
-                </View>
-                <View style={styles.actionRow}>
-                  <PrimaryAction label="Use Current Location" icon={<Navigation size={16} color={COLORS.text} />} onPress={() => void handleUseCurrentLocation()} disabled={isResolvingLocation || isPreparingMap} />
-                  <SecondaryAction label="Choose on Map" icon={<MapPinned size={16} color={COLORS.text} />} onPress={() => void handleOpenMapPicker()} disabled={isResolvingLocation || isPreparingMap} />
-                </View>
-              </>
+              <Pressable onPress={() => { void playSelectionHaptic(); void requestCameraAndCapture(); }} style={({ pressed }) => [styles.captureAreaSmall, pressed && styles.pressedBg]}>
+                <Camera color={COLORS.text} size={24} />
+                <Text style={styles.capturePrimaryText}>Add storefront photo</Text>
+              </Pressable>
             )}
-            
-            {draft.location && (
-              <TextInput
-                autoCapitalize="words"
-                onChangeText={(value) => updateField("neighborhood", value)}
-                onBlur={() => setFocusedField(null)}
-                onFocus={() => setFocusedField("neighborhood")}
-                placeholder="Area/Landmark (Optional)"
-                placeholderTextColor={COLORS.textMuted}
-                style={[styles.inputDense, { marginTop: spacing.md }, focusedField === "neighborhood" && styles.inputFocused]}
-                value={draft.neighborhood}
-              />
-            )}
+            <View style={styles.photoActions}>
+              <PrimaryAction icon={<Camera size={16} color={palette.white} />} label="Camera" onPress={() => void requestCameraAndCapture()} />
+              <SecondaryAction icon={<Images size={16} color={COLORS.text} />} label="Library" onPress={() => void requestLibraryAndPick()} />
+            </View>
           </View>
         </ScrollView>
 
         <View style={[styles.saveBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <Text style={[styles.saveStatus, !saveDisabled && styles.saveStatusReady]}>
-            {saveDisabled
-              ? !draft.name.trim()
-                ? "Missing: shop name"
-                : !draft.outcome
-                  ? "Missing: visit outcome"
-                  : "Missing: location"
-              : "Ready to save"}
-          </Text>
+          <View style={styles.readinessRow}>
+            <ReadinessPill attention={showValidation && missingName} complete={!missingName} label="Shop" />
+            <ReadinessPill attention={showValidation && missingLocation} complete={!missingLocation} label="Location" />
+            <ReadinessPill attention={showValidation && missingOutcome} complete={!missingOutcome} label="Outcome" />
+          </View>
           <Pressable 
-            disabled={saveDisabled} 
+            disabled={isSaving} 
             onPress={() => { void playSelectionHaptic(); void handleSave(); }} 
             style={({ pressed }) => [
               styles.saveButton, 
-              saveDisabled && styles.saveButtonDisabled, 
-              pressed && !saveDisabled && styles.pressedOpacity
+              pressed && !isSaving && styles.saveButtonPressed,
+              isSaving && styles.actionDisabled,
             ]}
           >
-            {isSaving ? <ActivityIndicator color={COLORS.text} /> : <Text style={styles.saveButtonText}>Save Lead</Text>}
+            {isSaving ? <ActivityIndicator color={palette.white} /> : <Text style={styles.saveButtonText}>{isReadyToSave ? "Save Visit" : "Save Visit"}</Text>}
           </Pressable>
         </View>
 
         {flashState && (
-          <View style={[styles.toast, flashState.tone === "success" && styles.toastSuccess, flashState.tone === "warning" && styles.toastWarning, flashState.tone === "error" && styles.toastError, { bottom: insets.bottom + 84 }]}>
+          <View style={[styles.toast, flashState.tone === "success" && styles.toastSuccess, flashState.tone === "warning" && styles.toastWarning, flashState.tone === "error" && styles.toastError, { bottom: insets.bottom + 112 }]}>
             <Text style={[styles.toastText, flashState.tone === "warning" && { color: COLORS.bg }]}>{flashState.message}</Text>
           </View>
         )}
@@ -678,6 +738,36 @@ export function CaptureScreen() {
         />
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+function ReadinessPill({
+  attention,
+  complete,
+  label,
+}: {
+  attention: boolean;
+  complete: boolean;
+  label: string;
+}) {
+  return (
+    <View
+      style={[
+        styles.readinessPill,
+        complete && styles.readinessPillComplete,
+        attention && styles.readinessPillAttention,
+      ]}
+    >
+      <Text
+        style={[
+          styles.readinessPillText,
+          complete && styles.readinessPillTextComplete,
+          attention && styles.readinessPillTextAttention,
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -723,16 +813,11 @@ function FolderPickerSheet({
 
   return (
     <AppBottomSheet
-      description="Select the operational module and folder before you save. This same modal pattern is used for lead management flows."
+      description="Choose the module and folder for this visit."
       onClose={onClose}
       title="Save Destination"
       visible={visible}
     >
-      <AppTip
-        message="Your active destination controls where the lead appears in list views and mission folders right after save."
-        tone="info"
-      />
-
       <View style={styles.sheetMissionSection}>
         <Text style={styles.sheetSectionLabel}>Module</Text>
         <View style={styles.sheetChipRow}>
@@ -832,35 +917,83 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   screen: { flex: 1 },
   flex: { flex: 1 },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   actionRow: { flexDirection: "row", gap: spacing.sm },
   actionRowTight: { flexDirection: "row", gap: spacing.xs },
   content: { gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.md },
-  
-  header: {
-    gap: spacing.sm,
-    paddingBottom: spacing.sm,
-    paddingTop: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.lg,
+
+  quickStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  syncChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.panel,
+  },
+  syncChipText: {
+    fontSize: typography.overline,
+    fontWeight: "800",
+    color: COLORS.text,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  pendingChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    backgroundColor: COLORS.warningSoft,
+  },
+  pendingChipText: {
+    fontSize: typography.overline,
+    fontWeight: "800",
+    color: COLORS.warning,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+
+  priorityCard: {
+    gap: spacing.md,
+    borderRadius: radii.lg,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: spacing.md,
     ...shadows.card,
   },
-  badgeLine: { flexDirection: "row", alignItems: "center", gap: 4 },
-  badgeText: { fontSize: typography.overline, fontWeight: "800", color: COLORS.text, textTransform: "uppercase" },
-  badgeCount: { fontSize: typography.overline, fontWeight: "800", color: COLORS.warning, textTransform: "uppercase" },
-  heroTitle: { fontSize: 28, fontWeight: "900", color: COLORS.text },
+  priorityHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  priorityCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  priorityTitle: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
   destinationCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
+    minHeight: 54,
+    minWidth: 170,
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-    padding: spacing.md,
+    backgroundColor: COLORS.panel,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   pressedDestinationCard: {
     backgroundColor: COLORS.inputBg,
@@ -877,31 +1010,14 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  destinationLabel: {
-    fontSize: typography.overline,
-    fontWeight: "800",
-    color: COLORS.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
   destinationValue: {
-    fontSize: typography.body,
+    fontSize: typography.label,
     fontWeight: "800",
     color: COLORS.text,
   },
   destinationMeta: {
-    fontSize: typography.label,
+    fontSize: 12,
     color: COLORS.textMuted,
-  },
-  destinationAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  destinationActionText: {
-    fontSize: typography.label,
-    fontWeight: "700",
-    color: COLORS.accentStrong,
   },
 
   card: {
@@ -947,22 +1063,45 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   eyebrow: { fontSize: typography.overline, fontWeight: "800", color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1 },
-  
-  captureAreaSmall: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 80, borderRadius: radii.sm, borderWidth: 1, borderColor: COLORS.border, borderStyle: "dashed", backgroundColor: COLORS.inputBg },
-  capturePrimaryText: { fontSize: typography.body, fontWeight: "800", color: COLORS.text },
-  
-  thumbnailRow: { gap: spacing.xs, paddingRight: spacing.xs },
-  thumbnailAddTile: { width: 70, height: 70, borderRadius: radii.sm, borderWidth: 1, borderColor: COLORS.border, borderStyle: "dashed", alignItems: "center", justifyContent: "center", backgroundColor: COLORS.inputBg },
-  thumbnailFrame: { width: 70, height: 70, borderRadius: radii.sm, overflow: "hidden", backgroundColor: COLORS.border },
-  thumbnailImage: { width: "100%", height: "100%" },
-  thumbnailRemove: { position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center" },
-  ghostActionRow: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
-  ghostActionText: { fontSize: typography.label, fontWeight: "600", color: COLORS.textMuted },
 
-  inputsBlock: { gap: 10 },
-  inputLarge: { height: 56, fontSize: 24, fontWeight: "800", color: COLORS.text, borderBottomWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
-  inputDense: { height: 46, fontSize: typography.body, fontWeight: "600", color: COLORS.text, borderBottomWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
+  fieldBlock: { gap: 6 },
+  fieldHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  fieldLabel: { fontSize: typography.overline, fontWeight: "800", color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.9 },
+  inputHero: {
+    minHeight: 58,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
+    paddingHorizontal: spacing.md,
+    fontSize: 24,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+  inputDense: {
+    minHeight: 48,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
+    paddingHorizontal: spacing.md,
+    fontSize: typography.body,
+    fontWeight: "600",
+    color: COLORS.text,
+  },
   inputFocused: { borderColor: "#3B82F6" },
+  inputError: { borderColor: COLORS.danger },
+  inlineError: { fontSize: 12, fontWeight: "700", color: COLORS.danger },
+
+  locationPanel: {
+    gap: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
+    padding: spacing.md,
+  },
+  validationPanel: { borderColor: COLORS.danger },
   outcomeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -990,32 +1129,70 @@ const styles = StyleSheet.create({
   outcomeChipTextActive: {
     color: COLORS.accentStrong,
   },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  cardMeta: {
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: COLORS.textMuted,
+  },
 
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.pill },
-  statusPending: { backgroundColor: COLORS.warningSoft },
-  statusConfirmed: { backgroundColor: COLORS.successSoft },
-  statusBadgeText: { fontSize: typography.overline, fontWeight: "800", textTransform: "uppercase" },
-  statusPendingText: { color: COLORS.warning },
-  statusConfirmedText: { color: COLORS.success },
+  toggleRow: { flexDirection: "row", gap: 6 },
+  toggleChip: {
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+  },
+  toggleChipActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: "#FFF3EC",
+  },
+  toggleChipMutedActive: {
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F1F5F9",
+  },
+  toggleChipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.textMuted,
+  },
+  toggleChipTextActive: {
+    color: COLORS.accentStrong,
+  },
+  toggleChipTextMutedActive: {
+    color: COLORS.text,
+  },
 
   emptyLocationRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  emptyLocationText: { fontSize: typography.body, color: COLORS.textMuted, fontWeight: "600" },
-  locationFoundBlock: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border, padding: spacing.sm, borderRadius: radii.sm },
+  emptyLocationText: { flex: 1, fontSize: typography.body, color: COLORS.textMuted, fontWeight: "600" },
+  locationFoundBlock: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, padding: spacing.sm, borderRadius: radii.sm },
   locationAreaName: { fontSize: typography.body, fontWeight: "800", color: COLORS.text },
   locationSecondary: { fontSize: typography.label, color: COLORS.textMuted, marginTop: 2 },
-  changeBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, borderRadius: radii.pill },
-  changeBtnText: { fontSize: typography.label, fontWeight: "700", color: COLORS.text },
+
+  captureAreaSmall: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 72, borderRadius: radii.sm, borderWidth: 1, borderColor: COLORS.border, borderStyle: "dashed", backgroundColor: COLORS.inputBg },
+  capturePrimaryText: { fontSize: typography.body, fontWeight: "800", color: COLORS.text },
+  photoActions: { flexDirection: "row", gap: spacing.sm },
+  thumbnailRow: { gap: spacing.xs, paddingRight: spacing.xs },
+  thumbnailAddTile: { width: 72, height: 72, borderRadius: radii.sm, borderWidth: 1, borderColor: COLORS.border, borderStyle: "dashed", alignItems: "center", justifyContent: "center", backgroundColor: COLORS.inputBg },
+  thumbnailFrame: { width: 72, height: 72, borderRadius: radii.sm, overflow: "hidden", backgroundColor: COLORS.border },
+  thumbnailImage: { width: "100%", height: "100%" },
+  thumbnailRemove: { position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center" },
 
   saveBar: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    gap: spacing.sm,
     backgroundColor: COLORS.card,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
@@ -1025,10 +1202,41 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  saveStatus: { fontSize: typography.body, fontWeight: "700", color: COLORS.textMuted },
-  saveStatusReady: { color: COLORS.success },
-  saveButton: { minWidth: 120, height: 48, borderRadius: radii.sm, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, backgroundColor: COLORS.accent },
-  saveButtonDisabled: { backgroundColor: "#D1D5DB" },
+  readinessRow: {
+    flexDirection: "row",
+    gap: spacing.xs,
+  },
+  readinessPill: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
+    paddingVertical: 7,
+  },
+  readinessPillComplete: {
+    borderColor: "#B7E2C9",
+    backgroundColor: COLORS.successSoft,
+  },
+  readinessPillAttention: {
+    borderColor: "#F2B8B5",
+    backgroundColor: COLORS.dangerSoft,
+  },
+  readinessPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.textMuted,
+  },
+  readinessPillTextComplete: {
+    color: COLORS.success,
+  },
+  readinessPillTextAttention: {
+    color: COLORS.danger,
+  },
+  saveButton: { minHeight: 54, borderRadius: radii.md, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, backgroundColor: COLORS.accent },
+  saveButtonPressed: { backgroundColor: COLORS.accentStrong },
   saveButtonText: { fontSize: typography.body, fontWeight: "800", color: palette.white },
 
   primaryAction: { flex: 1, height: 48, borderRadius: radii.sm, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: COLORS.accent },

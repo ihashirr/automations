@@ -37,6 +37,8 @@ export async function loadPendingCaptures() {
       category: capture.category?.trim() || "Unsorted",
       mission: capture.mission?.trim() || defaultMission.label,
       neighborhood: capture.neighborhood?.trim() || "",
+      role: capture.role?.trim() || "",
+      nextStep: capture.nextStep?.trim() || "",
       outcome:
         typeof capture.outcome === "string" && isVisitOutcome(capture.outcome)
           ? capture.outcome

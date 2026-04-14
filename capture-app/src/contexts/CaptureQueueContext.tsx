@@ -40,7 +40,9 @@ function normalizeDraft(draft: ShopDraft): ShopDraft {
     name: normalizeText(draft.name),
     phone: sanitizePhoneInput(draft.phone),
     contactPerson: normalizeText(draft.contactPerson),
+    role: normalizeText(draft.role ?? ""),
     referredBy: normalizeText(draft.referredBy),
+    nextStep: normalizeText(draft.nextStep ?? ""),
     outcome: draft.outcome,
     location: draft.location
       ? {
@@ -113,7 +115,9 @@ export function CaptureQueueProvider({ children }: { children: ReactNode }) {
       neighborhood: draft.neighborhood,
       phone: draft.phone,
       contactPerson: draft.contactPerson,
+      role: draft.role ?? "",
       referredBy: draft.referredBy,
+      nextStep: draft.nextStep ?? "",
       outcome: draft.outcome,
       images: imageUrls,
       location: draft.location,

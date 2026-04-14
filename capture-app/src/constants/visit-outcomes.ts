@@ -1,7 +1,7 @@
 export const visitOutcomeOptions = [
   { id: "no_answer", label: "No Answer" },
   { id: "spoke_to_staff", label: "Spoke To Staff" },
-  { id: "got_manager_number", label: "Got Manager Number" },
+  { id: "got_manager_number", label: "Got Number" },
   { id: "met_decision_maker", label: "Met Decision Maker" },
   { id: "follow_up_later", label: "Follow Up Later" },
   { id: "not_a_fit", label: "Not A Fit" },

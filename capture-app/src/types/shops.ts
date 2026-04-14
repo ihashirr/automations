@@ -22,7 +22,9 @@ export type ShopDraft = {
   neighborhood: string;
   phone: string;
   contactPerson: string;
+  role?: string;
   referredBy: string;
+  nextStep?: string;
   outcome: VisitOutcome | null;
   images: DraftImage[];
   location: CapturedLocation | null;
@@ -42,6 +44,7 @@ export type ShopSummary = {
   neighborhood: string;
   phone: string;
   contactPerson: string;
+  role?: string;
   outcome: VisitOutcomeValue;
   previewImageUrl: string | null;
   location: CapturedLocation | null;
@@ -67,7 +70,9 @@ export type ShopDetail = {
   neighborhood: string;
   phone: string;
   contactPerson: string;
+  role?: string;
   referredBy: string;
+  nextStep?: string;
   outcome: VisitOutcomeValue;
   images: string[];
   location: CapturedLocation | null;

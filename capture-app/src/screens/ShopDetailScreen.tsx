@@ -65,11 +65,10 @@ export function ShopDetailScreen({ navigation, route }: Props) {
 
         <View style={styles.heroCopy}>
           <Text style={styles.name}>{shop.name}</Text>
-          <Text style={styles.meta}>{shop.contactPerson || "No contact person saved"}</Text>
+          <Text style={styles.meta}>{shop.contactPerson || "No decision maker saved"}</Text>
+          {shop.role ? <Text style={styles.meta}>{shop.role}</Text> : null}
           <Text style={styles.meta}>{shop.phone || "No phone number saved"}</Text>
-          <Text style={styles.meta}>
-            {shop.referredBy ? `Referred by ${shop.referredBy}` : "Direct capture"}
-          </Text>
+          {shop.nextStep ? <Text style={styles.meta}>Next step: {shop.nextStep}</Text> : null}
           <View style={styles.outcomePill}>
             <Text style={styles.outcomePillText}>{getVisitOutcomeLabel(shop.outcome)}</Text>
           </View>
@@ -185,16 +184,20 @@ export function ShopDetailScreen({ navigation, route }: Props) {
             <Text style={styles.detailValue}>{shop.neighborhood || "Unknown"}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Contact</Text>
+            <Text style={styles.detailLabel}>Decision Maker</Text>
             <Text style={styles.detailValue}>{shop.contactPerson || "Not provided"}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Role</Text>
+            <Text style={styles.detailValue}>{shop.role || "Not provided"}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Phone</Text>
             <Text style={styles.detailValue}>{shop.phone || "Not provided"}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Referral</Text>
-            <Text style={styles.detailValue}>{shop.referredBy || "Direct capture"}</Text>
+            <Text style={styles.detailLabel}>Next Step</Text>
+            <Text style={styles.detailValue}>{shop.nextStep || "Not provided"}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Captured</Text>

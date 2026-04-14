@@ -68,7 +68,9 @@ function buildSearchText(fields: {
   neighborhood: string;
   phone: string;
   contactPerson: string;
+  role: string;
   referredBy: string;
+  nextStep: string;
   outcome: string;
 }) {
   return [
@@ -77,7 +79,9 @@ function buildSearchText(fields: {
     fields.name,
     fields.phone,
     fields.contactPerson,
+    fields.role,
     fields.referredBy,
+    fields.nextStep,
     fields.outcome,
     fields.formattedAddress,
     fields.neighborhood,
@@ -260,7 +264,9 @@ function toSearchTextInput(shop: {
   neighborhood: string;
   phone: string;
   contactPerson: string;
+  role: string;
   referredBy: string;
+  nextStep: string;
   outcome: string;
   formattedAddress: string;
 }) {
@@ -280,6 +286,7 @@ async function toShopSummary(ctx: QueryCtx, shop: Doc<"shops">) {
     neighborhood,
     phone: shop.phone,
     contactPerson: shop.contactPerson,
+    role: shop.role ?? "",
     outcome: resolveOutcome(shop),
     previewImageUrl: await resolvePreviewImageUrl(ctx, shop),
     location,
@@ -309,7 +316,9 @@ export const createShopRecord = internalMutation({
     neighborhood: v.string(),
     phone: v.string(),
     contactPerson: v.string(),
+    role: v.optional(v.string()),
     referredBy: v.string(),
+    nextStep: v.optional(v.string()),
     outcome: v.string(),
     images: v.array(v.string()),
     location: v.object({
@@ -324,7 +333,9 @@ export const createShopRecord = internalMutation({
     const name = normalizeText(args.name);
     const phone = normalizePhone(args.phone);
     const contactPerson = normalizeText(args.contactPerson);
+    const role = normalizeText(args.role ?? "");
     const referredBy = normalizeText(args.referredBy);
+    const nextStep = normalizeText(args.nextStep ?? "");
     const outcome = normalizeOutcome(args.outcome);
     const images = args.images.map((imageUrl) => imageUrl.trim());
     const location = normalizeLocation(args.location);
@@ -348,7 +359,9 @@ export const createShopRecord = internalMutation({
       neighborhood,
       phone,
       contactPerson,
+      role,
       referredBy,
+      nextStep,
       outcome,
       normalizedName,
       normalizedNeighborhood,
@@ -365,7 +378,9 @@ export const createShopRecord = internalMutation({
         neighborhood,
         phone,
         contactPerson,
+        role,
         referredBy,
+        nextStep,
         outcome,
         formattedAddress: location.formattedAddress,
       }),
@@ -383,7 +398,9 @@ export const createShop = action({
     neighborhood: v.optional(v.string()),
     phone: v.string(),
     contactPerson: v.string(),
+    role: v.optional(v.string()),
     referredBy: v.string(),
+    nextStep: v.optional(v.string()),
     outcome: v.string(),
     images: v.array(v.string()),
     location: v.object({
@@ -492,7 +509,9 @@ export const moveShop = mutation({
         neighborhood,
         phone: shop.phone,
         contactPerson: shop.contactPerson,
+        role: shop.role ?? "",
         referredBy: shop.referredBy,
+        nextStep: shop.nextStep ?? "",
         outcome: resolveOutcome(shop),
         formattedAddress: location?.formattedAddress ?? shop.address ?? "",
       }),
@@ -629,7 +648,9 @@ export const getShop = query({
       neighborhood,
       phone: shop.phone,
       contactPerson: shop.contactPerson,
+      role: shop.role,
       referredBy: shop.referredBy,
+      nextStep: shop.nextStep,
       outcome: resolveOutcome(shop),
       images,
       location,

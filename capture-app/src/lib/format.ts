@@ -38,7 +38,9 @@ export function matchesPendingCapture(capture: PendingCapture, rawQuery: string)
     capture.name,
     capture.phone,
     capture.contactPerson,
+    capture.role ?? "",
     capture.referredBy,
+    capture.nextStep ?? "",
     capture.location?.formattedAddress ?? "",
   ]);
 
