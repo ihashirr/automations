@@ -12,9 +12,23 @@ type ExpoExtra = {
   convexUrl?: string | null;
 };
 
-const convexUrlFromConfig =
-  (Constants.expoConfig?.extra as ExpoExtra | undefined)?.convexUrl ?? undefined;
-const convexUrl = convexUrlFromConfig ?? process.env.EXPO_PUBLIC_CONVEX_URL;
+function resolveConvexUrl() {
+  const configValue = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.convexUrl;
+
+  if (typeof configValue === "string" && configValue.trim()) {
+    return configValue.trim();
+  }
+
+  const envValue = process.env.EXPO_PUBLIC_CONVEX_URL;
+
+  if (typeof envValue === "string" && envValue.trim()) {
+    return envValue.trim();
+  }
+
+  return null;
+}
+
+const convexUrl = resolveConvexUrl();
 const convexClient = convexUrl
   ? new ConvexReactClient(convexUrl, {
       unsavedChangesWarning: false,
