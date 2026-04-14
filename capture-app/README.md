@@ -47,6 +47,9 @@ This app is designed for fast field execution:
 ## Project Structure
 
 ```text
+.agents/          Codex-local agent assets and mirrored project skills
+assets/           App icons and static image assets
+docs/             Architecture and operational project documentation
 src/
 	components/      Reusable UI blocks (cards, strips, action panels)
 	constants/       Theme tokens and mission/catalog definitions
@@ -66,7 +69,7 @@ Primary table: `shops`
 
 Fields include:
 - Identity and classification: `name`, `category`, `mission`, `neighborhood`
-- Contact: `phone`, `contactPerson`, `referredBy`
+- Contact: `phone`, `contactPerson`, `role`, `nextStep`, `referredBy`
 - Media: `images` (supports current URLs and legacy storage IDs), `imageUrls` (legacy)
 - Location: nested `location` + legacy flat fields (`latitude`, `longitude`, `address`)
 - Search and timestamps: `searchText`, `createdAt`, `updatedAt`
@@ -77,7 +80,9 @@ Indexes:
 - by mission + created time
 - by neighborhood + created time
 
-See full technical details in `docs/TECHNICAL_ARCHITECTURE.md`.
+See the docs index in `docs/README.md`.
+Architecture details live in `docs/architecture/technical-architecture.md`.
+Operational Convex rules live in `docs/operations/convex-bandwidth-rules.md`.
 
 ## Setup
 

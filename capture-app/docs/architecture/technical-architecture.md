@@ -106,7 +106,7 @@ Main table: shops
 
 Field groups:
 - Core identity: name, category, mission, neighborhood
-- Contact: phone, contactPerson, referredBy
+- Contact: phone, contactPerson, role, nextStep, referredBy
 - Media:
   - images (current URLs and legacy storage ids for compatibility)
   - imageUrls (legacy string array)
