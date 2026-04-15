@@ -67,15 +67,15 @@ function bindEvents() {
 
   // Queue click
   dom.queue.list.addEventListener('click', (e) => {
-    const item = e.target.closest('.queue-item');
+    const item = e.target.closest('.doc-row');
     if (item) selectDocument(item.dataset.id);
   });
 
-  // Filter chips
-  const chips = document.querySelectorAll('.queue-filters .chip');
-  chips.forEach(chip => {
-    chip.addEventListener('click', (e) => {
-      chips.forEach(c => c.classList.remove('active'));
+  // Filter tabs
+  const tabs = document.querySelectorAll('.inbox-tabs .inbox-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', (e) => {
+      tabs.forEach(t => t.classList.remove('active'));
       e.target.classList.add('active');
       currentFilter = e.target.dataset.filter;
       reRenderQueue();

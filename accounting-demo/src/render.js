@@ -313,7 +313,7 @@ export function renderQueue(documents, selectedId, filter = 'all', searchTerm = 
     else countLoading++;
   });
 
-  dom.queue.progress.textContent = `${documents.length} item${documents.length !== 1 ? 's' : ''}`;
+  dom.queue.progress.textContent = documents.length;
   const setCount = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   setCount('q-count-fail', countFail);
   setCount('q-count-review', countReview);
@@ -321,8 +321,10 @@ export function renderQueue(documents, selectedId, filter = 'all', searchTerm = 
   setCount('q-count-loading', countLoading);
 
   let filtered = documents;
-  if (filter !== 'all') {
-    filtered = filtered.filter(d => d.overallStatus === filter);
+  if (filter === 'fail') {
+    filtered = filtered.filter(d => d.overallStatus === 'fail' || d.overallStatus === 'review');
+  } else if (filter === 'pass') {
+    filtered = filtered.filter(d => d.overallStatus === 'pass');
   }
 
   if (searchTerm) {
@@ -333,18 +335,15 @@ export function renderQueue(documents, selectedId, filter = 'all', searchTerm = 
     });
   }
 
-  if (sortMode === 'risk') {
-    const riskOrder = { fail: 0, review: 1, loading: 2, pass: 3 };
-    filtered.sort((a, b) => (riskOrder[a.overallStatus] ?? 9) - (riskOrder[b.overallStatus] ?? 9));
-  } else if (sortMode === 'amount') {
-    filtered.sort((a, b) => (b.extractedData?.fields?.total || 0) - (a.extractedData?.fields?.total || 0));
-  }
+  // Sort by risk by default (flagged items first)
+  const riskOrder = { fail: 0, review: 1, loading: 2, pass: 3 };
+  filtered.sort((a, b) => (riskOrder[a.overallStatus] ?? 9) - (riskOrder[b.overallStatus] ?? 9));
 
   const groups = [
-    { key: 'fail', label: 'Exceptions', items: [] },
-    { key: 'review', label: 'Needs Review', items: [] },
+    { key: 'fail', label: 'Needs attention', items: [] },
+    { key: 'review', label: 'Under review', items: [] },
     { key: 'loading', label: 'Processing', items: [] },
-    { key: 'pass', label: 'Auto-Approved', items: [] },
+    { key: 'pass', label: 'Approved', items: [] },
   ];
 
   filtered.forEach(doc => {
@@ -360,36 +359,26 @@ export function renderQueue(documents, selectedId, filter = 'all', searchTerm = 
     header.innerHTML = `<span>${group.label}</span><span class="q-section-count">${group.items.length}</span>`;
     dom.queue.list.appendChild(header);
 
-    group.items.forEach(doc => {
+    group.items.forEach((doc, i) => {
       const el = document.createElement('div');
-      el.className = `queue-item status-${doc.overallStatus} ${doc.id === selectedId ? 'active' : ''}`;
+      el.className = `doc-row status-${doc.overallStatus} ${doc.id === selectedId ? 'active' : ''}`;
       el.dataset.id = doc.id;
+      el.style.animationDelay = `${i * 40}ms`;
 
       const vendor = getVendorName(doc);
-      const conf = getConfidence(doc);
-      const confClass = conf >= 95 ? 'q-conf-high' : (conf >= 80 ? 'q-conf-med' : 'q-conf-low');
-      const reason = getTriageReason(doc);
       const sym = doc.extractedData?.fields?.currencySymbol || '';
       const total = doc.extractedData?.fields?.total;
       const amountText = total != null ? `${sym} ${total.toLocaleString(undefined,{minimumFractionDigits:2})}` : '';
 
-      let badgeLabel, badgeClass;
-      if (doc.overallStatus === 'pass') { badgeLabel = 'Approved'; badgeClass = 'q-badge-pass'; }
-      else if (doc.overallStatus === 'review') { badgeLabel = 'Review'; badgeClass = 'q-badge-review'; }
-      else if (doc.overallStatus === 'fail') { badgeLabel = 'Exception'; badgeClass = 'q-badge-fail'; }
-      else { badgeLabel = 'Processing'; badgeClass = 'q-badge-loading'; }
-
       el.innerHTML = `
-        <div class="q-row-top">
-          <span class="q-title">${doc.fileName}</span>
-          ${doc.overallStatus !== 'loading' ? `<span class="q-confidence ${confClass}">${conf}%</span>` : ''}
+        <span class="doc-row-dot"></span>
+        <div class="doc-row-body">
+          <div class="doc-row-name">${doc.fileName}</div>
+          <div class="doc-row-meta">
+            <span>${vendor}</span>
+            ${amountText ? `<span class="doc-row-amount">${amountText}</span>` : ''}
+          </div>
         </div>
-        <div class="q-vendor">${vendor}</div>
-        <div class="q-row-bottom">
-          <span class="q-amount">${amountText}</span>
-          <span class="q-badge ${badgeClass}">${badgeLabel}</span>
-        </div>
-        ${reason ? `<div class="q-reason">${reason}</div>` : ''}
       `;
 
       dom.queue.list.appendChild(el);
