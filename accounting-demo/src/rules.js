@@ -66,19 +66,8 @@ export const rules = {
     }
   },
 
-  dateValidity: {
-    id: 'dateValidity',
-    label: 'Date validity',
-    execute: (fields) => {
-      if (!fields.invoiceDate) {
-        return { id: 'dateValidity', label: 'Date validity', formula: 'Date missing', status: 'review' };
-      }
-      const daysDiff = Math.floor((Date.now() - new Date(fields.invoiceDate).getTime()) / (1000*60*60*24));
-      const dateOk = daysDiff >= 0 && daysDiff <= 1825;
-      const formula = dateOk ? `Invoice dated ${fields.invoiceDate} (within ${daysDiff}d)` : `Invoice dated ${fields.invoiceDate} (outside 5-year window)`;
-      return { id: 'dateValidity', label: 'Date validity', formula, status: dateOk ? 'pass' : 'review' };
-    }
   },
+
 
   currencyConsistency: {
     id: 'currencyConsistency',
