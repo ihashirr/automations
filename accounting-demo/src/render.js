@@ -54,13 +54,58 @@ export const dom = {
 };
 
 /**
+ * Generic number counter animation
+ */
+function animateValue(obj, start, end, duration, formatStr = '') {
+  let startTimestamp = null;
+  const isFloat = end % 1 !== 0 || formatStr === 'h';
+  
+  const step = (timestamp) => {
+    if (!startTimestamp) startTimestamp = timestamp;
+    const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+    const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+    
+    let current = progress * (end - start) + start;
+    if (!isFloat) current = Math.floor(current);
+    
+    obj.textContent = isFloat ? current.toFixed(1) + formatStr : current.toLocaleString() + formatStr;
+    
+    if (progress < 1) {
+      window.requestAnimationFrame(step);
+    } else {
+      obj.textContent = isFloat ? end.toFixed(1) + formatStr : end.toLocaleString() + formatStr;
+    }
+  };
+  window.requestAnimationFrame(step);
+}
+
+let kpiState = { processed: 0, passed: 0, review: 0, saved: 0 };
+
+/**
  * Updates the global KPI dashboard
  */
 export function updateKPIs(metrics) {
-  document.getElementById('kpi-processed').textContent = metrics.processed.toLocaleString();
-  document.getElementById('kpi-passed').textContent = metrics.passed.toLocaleString();
-  document.getElementById('kpi-review').textContent = metrics.review.toLocaleString();
-  document.getElementById('kpi-saved').textContent = metrics.timeSavedHours.toFixed(1) + 'h';
+  const elProc = document.getElementById('kpi-processed');
+  const elPass = document.getElementById('kpi-passed');
+  const elRev = document.getElementById('kpi-review');
+  const elSav = document.getElementById('kpi-saved');
+
+  if (elProc && kpiState.processed !== metrics.processed) {
+    animateValue(elProc, kpiState.processed, metrics.processed, 800);
+    kpiState.processed = metrics.processed;
+  }
+  if (elPass && kpiState.passed !== metrics.passed) {
+    animateValue(elPass, kpiState.passed, metrics.passed, 800);
+    kpiState.passed = metrics.passed;
+  }
+  if (elRev && kpiState.review !== metrics.review) {
+    animateValue(elRev, kpiState.review, metrics.review, 800);
+    kpiState.review = metrics.review;
+  }
+  if (elSav && kpiState.saved !== metrics.timeSavedHours) {
+    animateValue(elSav, kpiState.saved, metrics.timeSavedHours, 800, 'h');
+    kpiState.saved = metrics.timeSavedHours;
+  }
 
   const pctPassed = metrics.processed > 0 ? ((metrics.passed / metrics.processed) * 100) : 0;
   const pctReview = metrics.processed > 0 ? ((metrics.review / metrics.processed) * 100) : 0;

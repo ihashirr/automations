@@ -106,7 +106,9 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 12px 28px;
-  background: var(--bg-raised);
+  background: rgba(22, 25, 34, 0.85); /* Slightly transparent for blur */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
@@ -238,7 +240,12 @@ body {
   transition: all 0.2s ease;
   position: relative;
 }
-.policy-card:hover { border-color: var(--border-light); transform: translateY(-2px); background: rgba(255,255,255,0.02); }
+.policy-card:hover { 
+  border-color: var(--border-light); 
+  transform: translateY(-2px); 
+  background: rgba(255,255,255,0.02);
+  box-shadow: 0 8px 24px rgba(99,102,241,0.08); /* Soft glow */
+}
 .policy-card.active {
   background: rgba(99, 102, 241, 0.05); border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
@@ -409,7 +416,11 @@ body {
   border-radius: 10px; margin-bottom: 2px;
   cursor: pointer; transition: all 0.15s ease;
   border: 1px solid transparent;
-  animation: docRowIn 0.25s ease both;
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 .doc-row:hover { background: var(--bg-hover); }
 .doc-row.active {
@@ -527,6 +538,11 @@ body {
 
 .doc-view-layout {
   display: flex; flex-direction: column; height: 100%;
+  animation: fadeInView 0.4s ease both;
+}
+@keyframes fadeInView {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .doc-view-layout.hidden { display: none !important; }
 
@@ -673,7 +689,8 @@ body {
 
 /* Staggered reveal */
 @keyframes proofReveal {
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(6px) scale(0.98); filter: blur(2px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
 @keyframes formulaHighlight {
   0%   { color: var(--accent); }
@@ -714,8 +731,9 @@ body {
 
 .drawer-overlay {
   position: absolute; inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(2px);
+  background: rgba(15, 17, 23, 0.6); /* Use brand BG mix */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   opacity: 0; transition: opacity 0.3s ease;
 }
 .pdf-drawer:not(.hidden) .drawer-overlay { opacity: 1; }
