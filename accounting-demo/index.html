@@ -1,301 +1,336 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AuditBot — Intelligent Invoice Automation</title>
-    <meta name="description" content="Enterprise-grade automated invoice extraction, validation, and compliance audit platform." />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    </script>
-  </head>
-  <body>
-    <div class="app-shell">
 
-      <!-- Top Navbar -->
-      <header class="topbar">
-        <div class="topbar-left">
-          <div class="logo-mark">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5Z"/><path d="M6 9.01V9"/><path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19"/></svg>
-          </div>
-          <div class="logo-text">
-            <span class="brand-name">AuditBot</span>
-            <span class="brand-edition">Enterprise</span>
-          </div>
-        </div>
-        <div class="topbar-right">
-          <button id="btn-add-files" class="topbar-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add Files
-          </button>
-          <button id="btn-export-csv" class="topbar-btn btn-ghost">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Export CSV
-          </button>
-        </div>
-      </header>
+<head>
+	<meta charset="UTF-8" />
+	<link rel="icon" type="image/svg+xml" href="/vite.svg" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>AuditBot — Intelligent Invoice Automation</title>
+	<meta name="description"
+		content="Enterprise-grade automated invoice extraction, validation, and compliance audit platform." />
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+	<script>
+		pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+	</script>
+</head>
 
-      <!-- KPI Strip -->
-      <section class="kpi-strip">
-        <div class="kpi-card">
-          <div class="kpi-icon kpi-icon-processed">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">Documents Processed</span>
-            <div class="kpi-row">
-              <span class="kpi-value" id="kpi-processed">--</span>
-            </div>
-          </div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-icon kpi-icon-approved">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">Auto-Approved</span>
-            <div class="kpi-row">
-              <span class="kpi-value kpi-val-success" id="kpi-passed">--</span>
-              <span class="kpi-pct" id="kpi-pct-passed"></span>
-            </div>
-            <div class="kpi-bar-track"><div class="kpi-bar-fill kpi-bar-success" id="kpi-bar-passed"></div></div>
-          </div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-icon kpi-icon-review">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">Needs Review</span>
-            <div class="kpi-row">
-              <span class="kpi-value kpi-val-warning" id="kpi-review">--</span>
-              <span class="kpi-pct" id="kpi-pct-review"></span>
-            </div>
-            <div class="kpi-bar-track"><div class="kpi-bar-fill kpi-bar-warning" id="kpi-bar-review"></div></div>
-          </div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-icon kpi-icon-saved">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">Est. Hours Saved</span>
-            <div class="kpi-row">
-              <span class="kpi-value" id="kpi-saved">--</span>
-              <span class="kpi-benchmark">vs ~2.5h manual</span>
-            </div>
-          </div>
-        </div>
-      </section>
+<body>
+	<div class="app-shell">
 
-      <!-- Upload Screen -->
-      <section id="step-upload" class="upload-screen active">
-        <div class="upload-hero">
-          <div class="upload-zone" id="upload-zone-area">
-            <div class="upload-icon-wrap">
-              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            </div>
-            <h2 class="upload-heading">Drop invoices here to begin audit</h2>
-            <p class="upload-sub">Drag multiple PDF invoices, or click to browse. Digital PDFs work best.</p>
-            <input type="file" id="real-file-upload" accept="application/pdf" multiple style="display: none;" />
-            <button id="btn-browse-files" class="btn btn-accent">Browse Files</button>
-            <p class="upload-privacy">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              Processed entirely in your browser. No data leaves your device.
-            </p>
-          </div>
-          <div class="upload-samples">
-            <span class="samples-label">No files? Try sample invoices:</span>
-            <div class="samples-btns">
-              <button id="btn-demo-correct" class="btn btn-ghost-sm">✓ Valid Invoice</button>
-              <button id="btn-demo-incorrect" class="btn btn-ghost-sm">✗ Mismatched Invoice</button>
-            </div>
-          </div>
-        </div>
-        <div id="upload-loader" class="loader-container hidden">
-          <div class="spinner"></div>
-          <p id="extraction-status-text">Extracting data…</p>
-        </div>
-      </section>
+		<!-- Top Navbar -->
+		<header class="topbar">
+			<div class="topbar-left">
+				<div class="logo-mark">
+					<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+						stroke-linecap="round" stroke-linejoin="round">
+						<path d="M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5Z" />
+						<path d="M6 9.01V9" />
+						<path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19" />
+					</svg>
+				</div>
+				<div class="logo-text">
+					<span class="brand-name">AuditBot</span>
+					<span class="brand-edition">Enterprise</span>
+				</div>
+			</div>
+			<div class="topbar-right">
+				<button id="btn-add-files" class="topbar-btn">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<line x1="12" y1="5" x2="12" y2="19" />
+						<line x1="5" y1="12" x2="19" y2="12" />
+					</svg>
+					Add Files
+				</button>
+				<button id="btn-export-csv" class="topbar-btn btn-ghost">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+						stroke-linecap="round" stroke-linejoin="round">
+						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+						<polyline points="7 10 12 15 17 10" />
+						<line x1="12" y1="15" x2="12" y2="3" />
+					</svg>
+					Export CSV
+				</button>
+			</div>
+		</header>
 
-      <!-- ========== WORKSPACE ========== -->
-      <div id="panel-layout" class="workspace hidden">
+		<!-- KPI Strip -->
+		<section class="kpi-strip">
+			<div class="kpi-card">
+				<div class="kpi-icon kpi-icon-processed">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+						<polyline points="14 2 14 8 20 8" />
+					</svg>
+				</div>
+				<div class="kpi-body">
+					<span class="kpi-label">Documents Processed</span>
+					<div class="kpi-row">
+						<span class="kpi-value" id="kpi-processed">--</span>
+					</div>
+				</div>
+			</div>
+			<div class="kpi-card">
+				<div class="kpi-icon kpi-icon-approved">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="20 6 9 17 4 12" />
+					</svg>
+				</div>
+				<div class="kpi-body">
+					<span class="kpi-label">Auto-Approved</span>
+					<div class="kpi-row">
+						<span class="kpi-value kpi-val-success" id="kpi-passed">--</span>
+						<span class="kpi-pct" id="kpi-pct-passed"></span>
+					</div>
+					<div class="kpi-bar-track">
+						<div class="kpi-bar-fill kpi-bar-success" id="kpi-bar-passed"></div>
+					</div>
+				</div>
+			</div>
+			<div class="kpi-card">
+				<div class="kpi-icon kpi-icon-review">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10" />
+						<line x1="12" y1="8" x2="12" y2="12" />
+						<line x1="12" y1="16" x2="12.01" y2="16" />
+					</svg>
+				</div>
+				<div class="kpi-body">
+					<span class="kpi-label">Needs Review</span>
+					<div class="kpi-row">
+						<span class="kpi-value kpi-val-warning" id="kpi-review">--</span>
+						<span class="kpi-pct" id="kpi-pct-review"></span>
+					</div>
+					<div class="kpi-bar-track">
+						<div class="kpi-bar-fill kpi-bar-warning" id="kpi-bar-review"></div>
+					</div>
+				</div>
+			</div>
+			<div class="kpi-card">
+				<div class="kpi-icon kpi-icon-saved">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10" />
+						<polyline points="12 6 12 12 16 14" />
+					</svg>
+				</div>
+				<div class="kpi-body">
+					<span class="kpi-label">Est. Hours Saved</span>
+					<div class="kpi-row">
+						<span class="kpi-value" id="kpi-saved">--</span>
+						<span class="kpi-benchmark">vs ~2.5h manual</span>
+					</div>
+				</div>
+			</div>
+		</section>
 
-        <!-- LEFT: Smart Triage Rail -->
-        <aside class="ws-queue">
+		<!-- Upload Screen -->
+		<section id="step-upload" class="upload-screen active">
+			<div class="upload-hero">
+				<div class="upload-zone" id="upload-zone-area">
+					<div class="upload-icon-wrap">
+						<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+							stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+							<polyline points="17 8 12 3 7 8" />
+							<line x1="12" y1="3" x2="12" y2="15" />
+						</svg>
+					</div>
+					<h2 class="upload-heading">Drop invoices here to begin audit</h2>
+					<p class="upload-sub">Drag multiple PDF invoices, or click to browse. Digital PDFs work best.</p>
+					<input type="file" id="real-file-upload" accept="application/pdf" multiple style="display: none;" />
+					<button id="btn-browse-files" class="btn btn-accent">Browse Files</button>
+					<p class="upload-privacy">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+							stroke-width="2">
+							<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+							<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+						</svg>
+						Processed entirely in your browser. No data leaves your device.
+					</p>
+				</div>
+				<div class="upload-samples">
+					<span class="samples-label">No files? Try sample invoices:</span>
+					<div class="samples-btns">
+						<button id="btn-demo-correct" class="btn btn-ghost-sm">✓ Valid Invoice</button>
+						<button id="btn-demo-incorrect" class="btn btn-ghost-sm">✗ Mismatched Invoice</button>
+					</div>
+				</div>
+			</div>
+			<div id="upload-loader" class="loader-container hidden">
+				<div class="spinner"></div>
+				<p id="extraction-status-text">Extracting data…</p>
+			</div>
+		</section>
 
-          <!-- Queue Summary -->
-          <div class="q-summary">
-            <div class="q-summary-row">
-              <span class="q-summary-label">Queue</span>
-              <span class="q-summary-count" id="queue-progress-text">0 items</span>
-            </div>
-            <div class="q-summary-stats" id="queue-summary-stats">
-              <span class="q-stat q-stat-danger" id="q-stat-fail" title="Exceptions">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                <span id="q-count-fail">0</span>
-              </span>
-              <span class="q-stat q-stat-warning" id="q-stat-review" title="Needs review">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span id="q-count-review">0</span>
-              </span>
-              <span class="q-stat q-stat-success" id="q-stat-pass" title="Auto-approved">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                <span id="q-count-pass">0</span>
-              </span>
-              <span class="q-stat q-stat-dim" id="q-stat-loading" title="Processing">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                <span id="q-count-loading">0</span>
-              </span>
-            </div>
-          </div>
+		<!-- ========== WORKSPACE ========== -->
+		<div id="panel-layout" class="workspace hidden">
 
-          <!-- Search + Sort -->
-          <div class="q-toolbar">
-            <div class="q-search-wrap">
-              <svg class="q-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input type="text" id="queue-search" class="q-search" placeholder="Search invoices…" />
-            </div>
-            <select id="queue-sort" class="q-sort">
-              <option value="time">Recent</option>
-              <option value="risk">Risk ↑</option>
-              <option value="amount">Amount ↓</option>
-            </select>
-          </div>
+			<!-- LEFT: Smart Triage Rail -->
+			<aside class="ws-queue">
 
-          <!-- Filter Chips -->
-          <div class="queue-filters">
-            <button class="chip active" data-filter="all">All</button>
-            <button class="chip" data-filter="fail">Exceptions</button>
-            <button class="chip" data-filter="review">Review</button>
-            <button class="chip" data-filter="pass">Approved</button>
-          </div>
+				<!-- Queue Summary -->
+				<div class="q-summary">
+					<div class="q-summary-row">
+						<span class="q-summary-label">Queue</span>
+						<span class="q-summary-count" id="queue-progress-text">0 items</span>
+					</div>
+					<div class="q-summary-stats" id="queue-summary-stats">
+						<span class="q-stat q-stat-danger" id="q-stat-fail" title="Exceptions">
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+								stroke-width="2.5">
+								<line x1="18" y1="6" x2="6" y2="18" />
+								<line x1="6" y1="6" x2="18" y2="18" />
+							</svg>
+							<span id="q-count-fail">0</span>
+						</span>
+						<span class="q-stat q-stat-warning" id="q-stat-review" title="Needs review">
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+								stroke-width="2.5">
+								<circle cx="12" cy="12" r="10" />
+								<line x1="12" y1="8" x2="12" y2="12" />
+								<line x1="12" y1="16" x2="12.01" y2="16" />
+							</svg>
+							<span id="q-count-review">0</span>
+						</span>
+						<span class="q-stat q-stat-success" id="q-stat-pass" title="Auto-approved">
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+								stroke-width="2.5">
+								<polyline points="20 6 9 17 4 12" />
+							</svg>
+							<span id="q-count-pass">0</span>
+						</span>
+						<span class="q-stat q-stat-dim" id="q-stat-loading" title="Processing">
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+								stroke-width="2">
+								<circle cx="12" cy="12" r="10" />
+								<polyline points="12 6 12 12 16 14" />
+							</svg>
+							<span id="q-count-loading">0</span>
+						</span>
+					</div>
+				</div>
 
-          <!-- Grouped Queue List -->
-          <div class="queue-list" id="queue-list-container"></div>
+				<!-- Search + Sort -->
+				<div class="q-toolbar">
+					<div class="q-search-wrap">
+						<svg class="q-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+							stroke="currentColor" stroke-width="2">
+							<circle cx="11" cy="11" r="8" />
+							<line x1="21" y1="21" x2="16.65" y2="16.65" />
+						</svg>
+						<input type="text" id="queue-search" class="q-search" placeholder="Search invoices…" />
+					</div>
+					<select id="queue-sort" class="q-sort">
+						<option value="time">Recent</option>
+						<option value="risk">Risk ↑</option>
+						<option value="amount">Amount ↓</option>
+					</select>
+				</div>
 
-        </aside>
+				<!-- Filter Chips -->
+				<div class="queue-filters">
+					<button class="chip active" data-filter="all">All</button>
+					<button class="chip" data-filter="fail">Exceptions</button>
+					<button class="chip" data-filter="review">Review</button>
+					<button class="chip" data-filter="pass">Approved</button>
+				</div>
 
-        <!-- CENTER: Tables (the real product surface) -->
-        <section class="ws-center">
+				<!-- Grouped Queue List -->
+				<div class="queue-list" id="queue-list-container"></div>
 
-          <!-- Extracted Fields Table -->
-          <div id="step-extracted" class="panel hidden">
-            <div class="panel-head">
-              <h3>Extracted Fields</h3>
-              <span class="panel-head-sub" id="display-file-name">—</span>
-            </div>
-            <div class="panel-body panel-body-flush">
-              <table class="data-table" id="extracted-table">
-                <thead>
-                  <tr><th>Field</th><th>Source Value</th><th class="col-right">Normalized</th><th class="col-right">Confidence</th></tr>
-                </thead>
-                <tbody id="extracted-table-body"></tbody>
-              </table>
-            </div>
-          </div>
+			</aside>
 
-          <!-- Validation Checks Table -->
-          <div id="step-audit" class="panel hidden">
-            <div class="panel-head">
-              <h3>Checks Performed</h3>
-              <div class="panel-head-actions">
-                <button class="chip chip-sm" id="btn-show-exceptions">Show only exceptions</button>
-              </div>
-            </div>
-            <div class="panel-body panel-body-flush">
-              <div id="audit-loading" class="loader-container hidden">
-                <div class="spinner"></div>
-                <p>Running compliance checks…</p>
-              </div>
-              <div id="audit-results-container" class="hidden">
-                <table class="data-table" id="audit-table-container">
-                  <thead>
-                    <tr><th>Check</th><th>Formula / Rule</th><th>Output</th><th class="col-center">Status</th></tr>
-                  </thead>
-                  <tbody id="audit-table-body"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+			<!-- CENTER: Main View Layout -->
+			<section class="ws-main">
 
-          <!-- Collapsible PDF Drawer -->
-          <div class="pdf-drawer" id="pdf-drawer">
-            <button class="drawer-toggle" id="btn-toggle-pdf">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              <span id="preview-doc-name">Source Document</span>
-              <svg class="drawer-chevron" id="drawer-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div class="drawer-body collapsed" id="pdf-drawer-body">
-              <iframe id="pdf-iframe" src="" width="100%" height="100%" style="border:none;"></iframe>
-            </div>
-          </div>
+				<!-- Empty State -->
+				<div id="empty-state" class="empty-state">
+					<div class="empty-state-content">
+						<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+							<polyline points="14 2 14 8 20 8" />
+							<line x1="16" y1="13" x2="8" y2="13" />
+							<line x1="16" y1="17" x2="8" y2="17" />
+							<polyline points="10 9 9 9 8 9" />
+						</svg>
+						<h2>Select an invoice</h2>
+						<p>Choose an item from the queue to view its status and details.</p>
+					</div>
+				</div>
 
-        </section>
+				<!-- Document View -->
+				<div id="doc-view-layout" class="doc-view-layout hidden">
+					
+					<!-- Business Summary Banner -->
+					<div class="doc-banner" id="doc-banner">
+						<div class="doc-banner-left">
+							<div class="db-icon-wrap" id="db-icon-wrap"></div>
+							<div class="db-text">
+								<h2 id="db-status">Status</h2>
+								<div id="db-reason" class="db-reason">Reason</div>
+								<div id="db-summary" class="db-summary">Short Summary</div>
+							</div>
+						</div>
+						<div class="doc-banner-right">
+							<button class="btn btn-ghost-sm btn-icon" id="btn-toggle-details">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M14 2v4a2 2 0 0 0 2 2h4"></path>
+									<path d="M15 18a3 3 0 1 0-6 0"></path>
+									<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+								</svg>
+								<span id="btn-toggle-details-text">View Details</span>
+							</button>
+							<button class="btn btn-primary btn-icon" id="btn-main-action">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="20 6 9 17 4 12" />
+								</svg>
+								<span id="btn-main-action-text">Review</span>
+							</button>
+						</div>
+					</div>
 
-        <!-- RIGHT: Decision Console -->
-        <aside class="ws-decision">
-          <div class="panel">
-            <div class="panel-head"><h3>Decision</h3></div>
-            <div class="panel-body">
+					<!-- Expandable Technical Details Pane -->
+					<div id="tech-details-pane" class="tech-details-pane collapsed">
+						<div class="tech-details-inner">
+							<div class="breakdown-container">
+								
+								<!-- What was found -->
+								<div class="bd-group">
+									<h4>What Was Found</h4>
+									<ul class="bd-list" id="bd-found-list"></ul>
+								</div>
 
-              <!-- Decision Summary Card -->
-              <div class="decision-card" id="final-summary-card">
-                <div class="dc-top">
-                  <div class="status-icon-wrap" id="status-icon-wrap"></div>
-                  <div class="dc-title-block">
-                    <h3 id="automation-result-text">Select a document</h3>
-                    <span class="dc-risk-label" id="dc-risk-label"></span>
-                  </div>
-                </div>
-                <p class="dc-reason" id="dc-reason">Upload or select an invoice from the queue.</p>
-                <p class="dc-proof" id="dc-proof"></p>
-              </div>
+								<!-- What matched -->
+								<div class="bd-group">
+									<h4>Validations Passed</h4>
+									<ul class="bd-list bd-list-success" id="bd-matched-list"></ul>
+								</div>
 
-              <!-- Metrics Grid -->
-              <div class="metrics-grid">
-                <div class="metric-item"><span class="metric-label">Confidence</span><span class="metric-val" id="meta-confidence">--</span></div>
-                <div class="metric-item"><span class="metric-label">Currency</span><span class="metric-val" id="meta-currency">--</span></div>
-                <div class="metric-item"><span class="metric-label">Checked at</span><span class="metric-val" id="meta-time">--</span></div>
-                <div class="metric-item"><span class="metric-label">Rules passed</span><span class="metric-val" id="meta-rules">--</span></div>
-                <div class="metric-item"><span class="metric-label">Exceptions</span><span class="metric-val" id="meta-exceptions">--</span></div>
-                <div class="metric-item"><span class="metric-label">Review needed</span><span class="metric-val" id="meta-review-needed">--</span></div>
-              </div>
+								<!-- What failed / Needs review -->
+								<div class="bd-group hidden" id="bd-issues-container">
+									<h4>Attention Required</h4>
+									<ul class="bd-list" id="bd-issues-list"></ul>
+								</div>
 
-              <!-- Evidence Checklist -->
-              <div class="evidence-section">
-                <h4>Evidence Checklist</h4>
-                <ul class="evidence-checklist" id="audit-list-container"></ul>
-              </div>
+							</div>
+						</div>
+					</div>
 
-              <!-- Decision Actions -->
-              <div class="decision-actions">
-                <button id="btn-override" class="dc-btn dc-btn-secondary">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                  Override Decision
-                </button>
-                <button id="btn-send-review" class="dc-btn dc-btn-primary">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-                  Send to Review
-                </button>
-                <button id="btn-re-upload" class="dc-btn dc-btn-ghost">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  Add More Files
-                </button>
-              </div>
+					<!-- PDF Viewer -->
+					<div class="doc-preview">
+						<iframe id="pdf-iframe" src="" width="100%" height="100%" style="border:none;"></iframe>
+					</div>
 
-            </div>
-          </div>
-        </aside>
+				</div>
 
-      </div>
+			</section>
 
-    </div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+		</div>
+
+	</div>
+	<script type="module" src="/src/main.js"></script>
+</body>
+
 </html>

@@ -9,7 +9,7 @@ let selectedDocId = null;
 let currentFilter = 'all';
 let searchTerm = '';
 let sortMode = 'time';
-let pdfDrawerOpen = false;
+let detailsPaneOpen = false;
 let showOnlyExceptions = false;
 
 // Simulated historical data
@@ -65,11 +65,6 @@ function bindEvents() {
     dom.buttons.exportCsv.addEventListener('click', exportToCSV);
   }
 
-  // Right-panel Add More
-  if (dom.buttons.reUpload) {
-    dom.buttons.reUpload.addEventListener('click', () => dom.inputs.realFileUpload.click());
-  }
-
   // Queue click
   dom.queue.list.addEventListener('click', (e) => {
     const item = e.target.closest('.queue-item');
@@ -105,12 +100,20 @@ function bindEvents() {
     });
   }
 
-  // PDF Drawer toggle
-  if (dom.buttons.togglePdf) {
-    dom.buttons.togglePdf.addEventListener('click', () => {
-      pdfDrawerOpen = !pdfDrawerOpen;
-      dom.pdfDrawerBody.classList.toggle('collapsed', !pdfDrawerOpen);
-      dom.drawerChevron.classList.toggle('open', pdfDrawerOpen);
+  // Toggle Details Pane
+  if (dom.banner.btnToggleDetails) {
+    dom.banner.btnToggleDetails.addEventListener('click', () => {
+      detailsPaneOpen = !detailsPaneOpen;
+      dom.techPane.classList.toggle('collapsed', !detailsPaneOpen);
+      dom.banner.btnToggleDetailsText.textContent = detailsPaneOpen ? 'Hide Details' : 'View Details';
+      
+      // Update SVG icon in the button
+      const svg = dom.banner.btnToggleDetails.querySelector('svg');
+      if (detailsPaneOpen) {
+        svg.innerHTML = '<path d="M18 15l-6-6-6 6"/>'; // Chevron up
+      } else {
+        svg.innerHTML = '<path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M15 18a3 3 0 1 0-6 0"></path><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>'; // List icon
+      }
     });
   }
 
@@ -120,31 +123,12 @@ function bindEvents() {
       showOnlyExceptions = !showOnlyExceptions;
       dom.buttons.showExceptions.classList.toggle('active', showOnlyExceptions);
       dom.buttons.showExceptions.textContent = showOnlyExceptions ? 'Show all checks' : 'Show only exceptions';
-      // Re-render if we have a selected doc
-      if (selectedDocId) {
-        const doc = documentsQueue.find(d => d.id === selectedDocId);
-        if (doc && doc.overallStatus !== 'loading') {
-          filterAuditRows();
-        }
-      }
     });
   }
 
   // Sample buttons
   dom.buttons.demoCorrect.addEventListener('click', () => handleMockUpload('correct'));
   dom.buttons.demoIncorrect.addEventListener('click', () => handleMockUpload('incorrect'));
-}
-
-function filterAuditRows() {
-  const rows = dom.auditTableBody.querySelectorAll('tr');
-  rows.forEach(row => {
-    if (showOnlyExceptions) {
-      const hasIssue = row.classList.contains('row-fail') || row.classList.contains('row-review');
-      row.style.display = hasIssue ? '' : 'none';
-    } else {
-      row.style.display = '';
-    }
-  });
 }
 
 function reRenderQueue() {
@@ -165,7 +149,13 @@ async function handleFiles(filesArray) {
 
   documentsQueue.push(...newDocs);
   showStep('workspace');
-  reRenderQueue();
+  
+  // Auto-select the first newly uploaded file if nothing is selected
+  if (!selectedDocId && newDocs.length > 0) {
+    selectDocument(newDocs[0].id);
+  } else {
+    reRenderQueue();
+  }
 
   for (let doc of newDocs) {
     await processDocument(doc.id);
@@ -207,9 +197,7 @@ async function processDocument(id) {
 
   reRenderQueue();
 
-  if (!selectedDocId) {
-    selectDocument(id);
-  } else if (selectedDocId === id) {
+  if (selectedDocId === id) {
     selectDocument(id);
   }
 }
@@ -221,25 +209,36 @@ function selectDocument(id) {
   const doc = documentsQueue.find(d => d.id === id);
   if (!doc) return;
 
+  // Show Document View, Hide Empty State
+  dom.layout.emptyState.classList.add('hidden');
+  dom.layout.docView.classList.remove('hidden');
+
   // PDF preview
   if (doc.file) {
     if (!doc.previewUrl) doc.previewUrl = URL.createObjectURL(doc.file);
     dom.layout.pdfIframe.src = doc.previewUrl;
   } else if (doc.type === 'mock') {
+    // If it's the mock invalid one, maybe try fetching it if it exists inside project dir, else blank
+    // A blank frame is fine for simple mocks
     dom.layout.pdfIframe.src = "about:blank";
   }
 
-  if (dom.previewDocName) dom.previewDocName.textContent = doc.fileName;
-
   if (doc.overallStatus === 'loading') {
-    dom.auditResultsContainer.classList.add('hidden');
-    dom.extractedTableBody.innerHTML = '<tr><td colspan="4" style="padding:20px; color:var(--text-muted);">Extracting data…</td></tr>';
-    dom.fileNameDisplay.textContent = doc.fileName;
+    dom.banner.status.textContent = 'Processing...';
+    dom.banner.reason.textContent = 'Extracting fields and running rules.';
+    dom.banner.summary.textContent = '';
+    dom.banner.container.className = 'doc-banner status-loading';
+    dom.banner.iconWrap.innerHTML = '<div class="spinner" style="width:20px;height:20px;margin:0;border-width:2px;border-color:currentColor;border-top-color:transparent;"></div>';
+    
+    // Clear lists
+    dom.breakdown.found.innerHTML = '<li><span class="bd-label">Extracting data...</span></li>';
+    dom.breakdown.matched.innerHTML = '';
+    dom.breakdown.issues.innerHTML = '';
+    dom.breakdown.issuesWrapper.classList.add('hidden');
+
   } else {
-    dom.auditResultsContainer.classList.remove('hidden');
     renderExtractedData(doc.extractedData);
     renderAuditResults(doc.findings, doc.overallStatus, doc.extractedData?.fields);
-    filterAuditRows(); // respect current exception filter
   }
 }
 
@@ -256,7 +255,10 @@ async function handleMockUpload(mockStatus) {
   };
   documentsQueue.push(newDoc);
   showStep('workspace');
-  reRenderQueue();
+  
+  if (!selectedDocId) selectDocument(newDoc.id);
+  else reRenderQueue();
+  
   await processDocument(newDoc.id);
 }
 
