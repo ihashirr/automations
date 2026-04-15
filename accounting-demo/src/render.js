@@ -40,11 +40,11 @@ export const dom = {
     trailTitle: document.getElementById('proof-trail-title'),
   },
   buttons: {
-    demoCorrect: document.getElementById('btn-demo-correct'),
     demoIncorrect: document.getElementById('btn-demo-incorrect'),
     addFiles: document.getElementById('btn-add-files'),
     exportCsv: document.getElementById('btn-export-csv'),
-  }
+  },
+  topbarActivePolicy: document.getElementById('topbar-active-policy')
 };
 
 /**

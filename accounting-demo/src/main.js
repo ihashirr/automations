@@ -26,7 +26,11 @@ function updateActivePolicyInfo() {
   const infoEl = document.getElementById('active-policy-info');
   const ruleset = ruleSets[activeRuleSet];
   if (infoEl && ruleset) {
-    infoEl.textContent = `Applying ${ruleset.rules.length} checks from "${ruleset.label}" to all uploads.`;
+    infoEl.textContent = `Audit strategy: ${ruleset.rules.length} checks from "${ruleset.label}" will be applied.`;
+  }
+  // Also update topbar static display
+  if (dom.topbarActivePolicy) {
+    dom.topbarActivePolicy.innerHTML = `Policy: <strong>${ruleset ? ruleset.label : 'None'}</strong>`;
   }
 }
 
@@ -78,15 +82,20 @@ function bindEvents() {
     });
   }
 
-  // Rule Set selector
-  const rulesetSelect = document.getElementById('ruleset-select');
-  if (rulesetSelect) {
-    rulesetSelect.value = activeRuleSet;
-    rulesetSelect.addEventListener('change', (e) => {
-      activeRuleSet = e.target.value;
+  // Policy Selection Cards
+  const policyCards = document.querySelectorAll('.policy-card');
+  policyCards.forEach(card => {
+    card.addEventListener('click', () => {
+      policyCards.forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      activeRuleSet = card.dataset.policy;
       updateActivePolicyInfo();
+      
+      // Visual feedback: simple scale pulse
+      card.style.transform = 'scale(1.02)';
+      setTimeout(() => card.style.transform = '', 200);
     });
-  }
+  });
 
   // Topbar Add Files
   if (dom.buttons.addFiles) {

@@ -37,13 +37,8 @@
 				</div>
 			</div>
 			<div class="topbar-right">
-				<div class="topbar-select-wrap">
-					<label for="ruleset-select">Rule Set:</label>
-					<select id="ruleset-select" class="topbar-select">
-						<option value="basicInvoice">Basic Invoice Checks</option>
-						<option value="uaeVatStandard">UAE VAT Standard</option>
-						<option value="creditNote">Credit Note Rules</option>
-					</select>
+				<div class="topbar-status-chip" id="topbar-active-policy">
+					Policy: <strong>UAE VAT Standard</strong>
 				</div>
 				<button id="btn-add-files" class="topbar-btn">
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -136,6 +131,39 @@
 		<!-- Upload Screen -->
 		<section id="step-upload" class="upload-screen active">
 			<div class="upload-hero">
+				<div class="policy-selection-wrap">
+					<h3>1. Select Audit Policy</h3>
+					<div class="policy-grid">
+						<div class="policy-card active" data-policy="uaeVatStandard">
+							<div class="policy-card-icon">
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M4.93 19.07L19.07 4.93"/></svg>
+							</div>
+							<div class="policy-card-info">
+								<h4>UAE VAT Standard</h4>
+								<p>Standard tax compliance with subtotal/VAT/total validation.</p>
+							</div>
+						</div>
+						<div class="policy-card" data-policy="basicInvoice">
+							<div class="policy-card-icon">
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+							</div>
+							<div class="policy-card-info">
+								<h4>Basic Invoice Checks</h4>
+								<p>Essential checks: Required fields, dates, and total consistency.</p>
+							</div>
+						</div>
+						<div class="policy-card" data-policy="creditNote">
+							<div class="policy-card-icon">
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 12h6m-3 3l3-3-3-3M15 19H3V5h12" /></svg>
+							</div>
+							<div class="policy-card-info">
+								<h4>Credit Note Rules</h4>
+								<p>Reverse validation logic for refunds and credit adjustments.</p>
+							</div>
+						</div>
+					</div>
+				</div>
+
 				<div class="upload-zone" id="upload-zone-area">
 					<div class="upload-icon-wrap">
 						<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -145,7 +173,7 @@
 							<line x1="12" y1="3" x2="12" y2="15" />
 						</svg>
 					</div>
-					<h2 class="upload-heading">Drop invoices here to begin audit</h2>
+					<h2 class="upload-heading">2. Drop invoices here to begin audit</h2>
 					<p class="upload-sub">Drag multiple PDF invoices, or click to browse. Digital PDFs work best.</p>
 					<input type="file" id="real-file-upload" accept="application/pdf" multiple style="display: none;" />
 					<button id="btn-browse-files" class="btn btn-accent">Browse Files</button>
