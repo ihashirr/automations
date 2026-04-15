@@ -142,21 +142,23 @@ function bindEvents() {
     });
   }
 
-  // Toggle Details Pane
-  if (dom.banner.btnToggleDetails) {
-    dom.banner.btnToggleDetails.addEventListener('click', () => {
-      detailsPaneOpen = !detailsPaneOpen;
-      dom.techPane.classList.toggle('collapsed', !detailsPaneOpen);
-      dom.banner.btnToggleDetailsText.textContent = detailsPaneOpen ? 'Hide Details' : 'View Details';
-      
-      // Update SVG icon in the button
-      const svg = dom.banner.btnToggleDetails.querySelector('svg');
-      if (detailsPaneOpen) {
-        svg.innerHTML = '<path d="M18 15l-6-6-6 6"/>'; // Chevron up
-      } else {
-        svg.innerHTML = '<path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M15 18a3 3 0 1 0-6 0"></path><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>'; // List icon
-      }
+  // Open PDF Drawer
+  if (dom.banner.btnViewDocument) {
+    dom.banner.btnViewDocument.addEventListener('click', () => {
+      if (dom.drawer.container) dom.drawer.container.classList.remove('hidden');
     });
+  }
+
+  // Close PDF Drawer
+  const closeDrawer = () => {
+    if (dom.drawer.container) dom.drawer.container.classList.add('hidden');
+  };
+  
+  if (dom.drawer.btnClose) {
+    dom.drawer.btnClose.addEventListener('click', closeDrawer);
+  }
+  if (dom.drawer.overlay) {
+    dom.drawer.overlay.addEventListener('click', closeDrawer);
   }
 
   // Show only exceptions toggle
@@ -257,14 +259,19 @@ function selectDocument(id) {
   dom.layout.emptyState.classList.add('hidden');
   dom.layout.docView.classList.remove('hidden');
 
-  // PDF preview
+  // PDF preview & Drawer Data
   if (doc.file) {
     if (!doc.previewUrl) doc.previewUrl = URL.createObjectURL(doc.file);
     dom.layout.pdfIframe.src = doc.previewUrl;
   } else if (doc.type === 'mock') {
-    // If it's the mock invalid one, maybe try fetching it if it exists inside project dir, else blank
-    // A blank frame is fine for simple mocks
     dom.layout.pdfIframe.src = "about:blank";
+  }
+
+  // Update Drawer Header
+  if (dom.drawer.fileName) dom.drawer.fileName.textContent = doc.fileName;
+  if (dom.drawer.ruleBadge) {
+    const rulesetInfo = ruleSets[doc.appliedRuleSetId] || { label: 'Unknown Policy' };
+    dom.drawer.ruleBadge.textContent = rulesetInfo.label;
   }
 
   if (doc.overallStatus === 'loading') {

@@ -27,8 +27,7 @@ export const dom = {
     status: document.getElementById('db-status'),
     reason: document.getElementById('db-reason'),
     summary: document.getElementById('db-summary'),
-    btnToggleDetails: document.getElementById('btn-toggle-details'),
-    btnToggleDetailsText: document.getElementById('btn-toggle-details-text'),
+    btnViewDocument: document.getElementById('btn-view-document'),
     btnMainAction: document.getElementById('btn-main-action'),
     btnMainActionText: document.getElementById('btn-main-action-text')
   },
@@ -44,7 +43,14 @@ export const dom = {
     addFiles: document.getElementById('btn-add-files'),
     exportCsv: document.getElementById('btn-export-csv'),
   },
-  topbarActivePolicy: document.getElementById('topbar-active-policy')
+  topbarActivePolicy: document.getElementById('topbar-active-policy'),
+  drawer: {
+    container: document.getElementById('pdf-drawer'),
+    overlay: document.getElementById('drawer-overlay'),
+    fileName: document.getElementById('drawer-file-name'),
+    ruleBadge: document.getElementById('drawer-rule-badge'),
+    btnClose: document.getElementById('btn-close-drawer')
+  }
 };
 
 /**
