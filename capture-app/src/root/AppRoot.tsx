@@ -1,14 +1,20 @@
 import { ReactNode } from "react";
-import { NavigationContainer, Theme as NavigationTheme } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  Theme as NavigationTheme,
+  useNavigationContainerRef,
+  useNavigationState,
+} from "@react-navigation/native";
 import {
   BottomTabBarProps,
   createBottomTabNavigator,
 } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { FolderOpen, Map, Plus } from "lucide-react-native";
+import { ArrowLeft, FolderOpen, Map, Plus } from "lucide-react-native";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette, radii, spacing } from "../constants/theme";
+import { useCaptureQueue } from "../contexts/CaptureQueueContext";
 import { useMissionControl } from "../contexts/MissionControlContext";
 import { playSelectionHaptic } from "../lib/haptics";
 import { HomeTabParamList, MissionsStackParamList, RootStackParamList } from "../navigation/types";
@@ -51,6 +57,19 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const MissionsStackStack = createNativeStackNavigator<MissionsStackParamList>();
 const Tabs = createBottomTabNavigator<HomeTabParamList>();
 
+type NavigationStateSnapshot = {
+  index: number;
+  routes: Array<{
+    name: string;
+    state?: {
+      index: number;
+      routes: Array<{
+        name: string;
+      }>;
+    };
+  }>;
+};
+
 function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { setActiveCategoryId } = useMissionControl();
@@ -91,6 +110,93 @@ function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
           label="Map"
           onPress={() => handleTabPress({ navigation, route: mapRoute, state })}
         />
+      </View>
+    </View>
+  );
+}
+
+type NavigationRefLike = {
+  canGoBack: () => boolean;
+  goBack: () => void;
+};
+
+function AppHeader({ navigationRef }: { navigationRef: NavigationRefLike }) {
+  const insets = useSafeAreaInsets();
+  const { activeCategoryLabel, activeMissionLabel } = useMissionControl();
+  const { isOnline, pendingCount } = useCaptureQueue();
+  const navigationState = useNavigationState((state) => state as unknown as NavigationStateSnapshot);
+
+  const rootRoute = navigationState.routes[navigationState.index];
+  const activeTabRoute = rootRoute.name === "Home" ? rootRoute.state?.routes[rootRoute.state.index] : null;
+  const activeTabName = activeTabRoute?.name ?? rootRoute.name;
+
+  let eyebrow = "CAPTURE APP";
+  let title = "Field Command";
+  let subtitle = activeMissionLabel;
+
+  if (rootRoute.name === "ShopDetail") {
+    eyebrow = "LEAD DETAIL";
+    title = "Review Lead";
+    subtitle = pendingCount > 0 ? `${pendingCount} queued capture${pendingCount === 1 ? "" : "s"}` : "Lead inspection";
+  } else if (activeTabName === "MissionHub") {
+    eyebrow = "FIELD HUB";
+    title = "Operational Modules";
+    subtitle = "Choose a module and keep the day moving.";
+  } else if (activeTabName === "MissionsList") {
+    eyebrow = activeMissionLabel.toUpperCase();
+    title = activeCategoryLabel ?? "Mission Feed";
+    subtitle = activeCategoryLabel ? `${activeMissionLabel} / ${activeCategoryLabel}` : "All folders";
+  } else if (activeTabName === "MissionDetail") {
+    eyebrow = activeMissionLabel.toUpperCase();
+    title = activeCategoryLabel ?? "Folder Detail";
+    subtitle = `${isOnline ? "Connected" : "Offline"} • ${pendingCount} queued`;
+  } else if (activeTabName === "Capture") {
+    eyebrow = "CAPTURE";
+    title = "New Lead";
+    subtitle = activeMissionLabel;
+  } else if (activeTabName === "Map") {
+    eyebrow = "MAP";
+    title = "Field Map";
+    subtitle = activeMissionLabel;
+  }
+
+  const canGoBack = navigationRef.canGoBack();
+
+  return (
+    <View style={[styles.appHeader, { paddingTop: insets.top + spacing.sm }]}>
+      <View style={styles.appHeaderTopRow}>
+        {canGoBack ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => navigationRef.goBack()}
+            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+          >
+            <ArrowLeft color={palette.ink} size={18} />
+          </Pressable>
+        ) : (
+          <View style={styles.backButtonSpacer} />
+        )}
+
+        <View style={styles.statusStack}>
+          <View style={[styles.statusPill, isOnline ? styles.statusPillConnected : styles.statusPillOffline]}>
+            <View style={[styles.statusDot, { backgroundColor: isOnline ? palette.success : palette.warning }]} />
+            <Text style={styles.statusPillText}>{isOnline ? "Connected" : "Offline"}</Text>
+          </View>
+          <View style={styles.secondaryPill}>
+            <Text style={styles.secondaryPillText}>{pendingCount > 0 ? `${pendingCount} queued` : "Queue clear"}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.appHeaderCopy}>
+        <Text style={styles.appHeaderEyebrow}>{eyebrow}</Text>
+        <Text numberOfLines={1} style={styles.appHeaderTitle}>
+          {title}
+        </Text>
+        <Text numberOfLines={1} style={styles.appHeaderSubtitle}>
+          {subtitle}
+        </Text>
       </View>
     </View>
   );
@@ -179,97 +285,159 @@ function CaptureTabButton({
 import { MissionHubScreen } from "../screens/MissionHubScreen";
 
 function MissionsStack() {
-  const { activeCategoryLabel, activeMissionLabel } = useMissionControl();
-
   return (
     <MissionsStackStack.Navigator
       initialRouteName="MissionHub"
       screenOptions={{
-        headerShadowVisible: false,
-        headerStyle: {
-          backgroundColor: palette.background,
-        },
-        headerTitleStyle: {
-          color: palette.ink,
-          fontWeight: "700",
-        },
-        headerTintColor: palette.ink,
-        headerTitleAlign: "left",
+        headerShown: false,
       }}
     >
       <MissionsStackStack.Screen
         component={MissionHubScreen}
         name="MissionHub"
-        options={{
-          headerShown: false,
-        }}
       />
       <MissionsStackStack.Screen
         component={ShopsListScreen}
         name="MissionsList"
-        options={{
-          headerTitle: activeMissionLabel,
-        }}
       />
       <MissionsStackStack.Screen
         component={ShopsListScreen}
         name="MissionDetail"
-        options={{
-          headerTitle: () => (
-            <View style={styles.breadcrumbTitle}>
-              <Text style={styles.breadcrumbRoot}>{activeMissionLabel}</Text>
-              <Text style={styles.breadcrumbSeparator}>/</Text>
-              <Text numberOfLines={1} style={styles.breadcrumbCurrent}>
-                {activeCategoryLabel}
-              </Text>
-            </View>
-          ),
-        }}
       />
     </MissionsStackStack.Navigator>
   );
 }
 
-function HomeTabs() {
+function HomeTabs({ navigationRef }: { navigationRef: NavigationRefLike }) {
   return (
-    <Tabs.Navigator
-      initialRouteName="Capture"
-      tabBar={(props) => <CommandTabBar {...props} />}
-      screenOptions={{
-        headerShown: false,
-        tabBarHideOnKeyboard: true,
-        sceneStyle: {
-          backgroundColor: palette.background,
-        },
-      }}
-    >
-      <Tabs.Screen component={MissionsStack} name="Missions" />
-      <Tabs.Screen component={CaptureScreen} name="Capture" />
-      <Tabs.Screen component={MapScreen} name="Map" />
-    </Tabs.Navigator>
+    <View style={styles.appShell}>
+      <AppHeader navigationRef={navigationRef} />
+      <View style={styles.appBody}>
+        <Tabs.Navigator
+          initialRouteName="Capture"
+          tabBar={(props) => <CommandTabBar {...props} />}
+          screenOptions={{
+            headerShown: false,
+            tabBarHideOnKeyboard: true,
+            sceneStyle: {
+              backgroundColor: palette.background,
+            },
+          }}
+        >
+          <Tabs.Screen component={MissionsStack} name="Missions" />
+          <Tabs.Screen component={CaptureScreen} name="Capture" />
+          <Tabs.Screen component={MapScreen} name="Map" />
+        </Tabs.Navigator>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  breadcrumbTitle: {
+  appShell: {
+    flex: 1,
+    backgroundColor: palette.background,
+  },
+  appBody: {
+    flex: 1,
+  },
+  appHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(24, 22, 29, 0.08)",
+    backgroundColor: "rgba(244, 238, 230, 0.96)",
+  },
+  appHeaderTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    justifyContent: "space-between",
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
-  breadcrumbRoot: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: palette.mutedInk,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.line,
   },
-  breadcrumbSeparator: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: palette.line,
+  backButtonPressed: {
+    opacity: 0.7,
   },
-  breadcrumbCurrent: {
-    fontSize: 17,
+  backButtonSpacer: {
+    width: 40,
+    height: 40,
+  },
+  statusStack: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 7,
+    borderRadius: radii.pill,
+    backgroundColor: palette.syncBadge,
+  },
+  statusPillConnected: {
+    backgroundColor: palette.successSoft,
+  },
+  statusPillOffline: {
+    backgroundColor: palette.warningSoft,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusPillText: {
+    fontSize: 11,
     fontWeight: "800",
     color: palette.ink,
+    letterSpacing: 0.2,
+    textTransform: "uppercase",
+  },
+  secondaryPill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 7,
+    borderRadius: radii.pill,
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.line,
+  },
+  secondaryPillText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: palette.mutedInk,
+    letterSpacing: 0.2,
+    textTransform: "uppercase",
+  },
+  appHeaderCopy: {
+    gap: 2,
+  },
+  appHeaderEyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: palette.accentStrong,
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+  },
+  appHeaderTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: palette.ink,
+  },
+  appHeaderSubtitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: palette.mutedInk,
   },
   tabBarShell: {
     backgroundColor: "transparent",
@@ -376,32 +544,20 @@ const styles = StyleSheet.create({
 });
 
 export function AppRoot() {
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
+
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme}>
       <Stack.Navigator
         screenOptions={{
-          headerShadowVisible: false,
-          headerStyle: {
-            backgroundColor: palette.background,
-          },
-          headerTitleStyle: {
-            color: palette.ink,
-            fontWeight: "700",
-          },
-          headerTintColor: palette.ink,
+          headerShown: false,
           contentStyle: {
             backgroundColor: palette.background,
           },
         }}
       >
-        <Stack.Screen component={HomeTabs} name="Home" options={{ headerShown: false }} />
-        <Stack.Screen
-          component={ShopDetailScreen}
-          name="ShopDetail"
-          options={{
-            title: "Lead Detail",
-          }}
-        />
+        <Stack.Screen name="Home">{() => <HomeTabs navigationRef={navigationRef} />}</Stack.Screen>
+        <Stack.Screen component={ShopDetailScreen} name="ShopDetail" />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -33,7 +33,7 @@ export function MissionHubScreen() {
         <View style={styles.cardEyebrowRow}>
           <Text style={styles.cardEyebrow}>Operational Module</Text>
           <View style={styles.cardPulse}>
-            <Text style={styles.cardPulseText}>Ready</Text>
+            <Text style={styles.cardPulseText}>Open</Text>
           </View>
         </View>
 
@@ -51,11 +51,11 @@ export function MissionHubScreen() {
         <View style={styles.cardStats}>
            <View style={styles.statItem}>
              <Target color={palette.mutedInk} size={14} />
-             <Text style={styles.statText}>Active Lead Feed</Text>
+             <Text style={styles.statText}>Lead flow</Text>
            </View>
            <View style={styles.statItem}>
              <Clock color={palette.mutedInk} size={14} />
-             <Text style={styles.statText}>Updated Just Now</Text>
+             <Text style={styles.statText}>Field log</Text>
            </View>
         </View>
 
@@ -69,11 +69,6 @@ export function MissionHubScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Text style={styles.headerEyebrow}>FIELD HUB</Text>
-        <Text style={styles.headerTitle}>Operational Modules</Text>
-      </View>
-
       <FlatList
         data={missionCatalog}
         keyExtractor={(item) => item.id}
@@ -99,7 +94,7 @@ export function MissionHubScreen() {
               <View style={styles.summaryDivider} />
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryValue}>24/7</Text>
-                <Text style={styles.summaryLabel}>Sync Engine</Text>
+                <Text style={styles.summaryLabel}>Queue Control</Text>
               </View>
             </View>
           </View>
@@ -113,22 +108,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: palette.background,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  headerEyebrow: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: palette.accentStrong,
-    letterSpacing: 2,
-    marginBottom: 4,
-  },
-  headerTitle: {
-    fontSize: 36,
-    fontWeight: "800",
-    color: palette.ink,
   },
   listContent: {
     padding: spacing.lg,

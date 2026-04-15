@@ -56,6 +56,7 @@ import { HomeTabParamList, MissionsStackParamList, RootStackParamList } from "..
 import { CapturedLocation, PendingCapture, ShopSummary } from "../types/shops";
 
 type SortMode = "latest" | "nearest";
+type FocusFilter = "all" | "hot" | "follow_up" | "unknown";
 type DashboardNavigation = CompositeNavigationProp<
   NativeStackNavigationProp<MissionsStackParamList>,
   NativeStackNavigationProp<RootStackParamList>
@@ -105,6 +106,7 @@ function ShopsListScreenContent() {
   } = useCaptureQueue();
   const [searchText, setSearchText] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("latest");
+  const [focusFilter, setFocusFilter] = useState<FocusFilter>("all");
   const [activeNeighborhood, setActiveNeighborhood] = useState<string | null>(null);
   const [currentLocation, setCurrentLocation] = useState<CapturedLocation | null>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -124,6 +126,7 @@ function ShopsListScreenContent() {
   useEffect(() => {
     setActiveNeighborhood(null);
     setSearchText("");
+    setFocusFilter("all");
   }, [activeCategoryId, activeMissionId]);
 
   useEffect(() => {
@@ -170,15 +173,8 @@ function ShopsListScreenContent() {
       const existingPermission = await Location.getForegroundPermissionsAsync();
       const permission =
         existingPermission.status === "granted"
-          ? existingPermission
-          : await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== "granted") {
-        setLocationIssue("Location permission is needed for nearest sorting.");
-        setSortMode("latest");
-        return;
-      }
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const coordinates = { lat: position.coords.latitude, lng: position.coords.longitude };
+        const { flushQueue, isFlushing, pendingCaptures, pendingCount, queueReady, reclassifyPendingCapture } = useCaptureQueue();
+        const [isOnline, setIsOnline] = useState(true);
       const details = await resolveLocationDetails({
         allowReverseGeocode: Platform.OS !== "web",
         coordinates,
@@ -198,14 +194,14 @@ function ShopsListScreenContent() {
   const missionRows = useMemo(() => {
     const pendingRows = pendingCaptures
       .filter((capture) => normalizeSearchText(capture.mission) === normalizeSearchText(activeMissionLabel))
-      .map<LeadTarget>((capture) => ({ kind: "pending", capture }));
-    const remoteRows = (feed ?? []).map<LeadTarget>((shop: ShopSummary) => ({ kind: "remote", shop }));
-    return [...pendingRows, ...remoteRows];
-  }, [activeMissionLabel, feed, pendingCaptures]);
-
-  const categoryCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const category of missionCategories) counts.set(category.label, 0);
+                  <View style={styles.syncBar}>
+                    <View style={styles.syncRow}>
+                      {isOnline ? <Wifi color={palette.success} size={16} /> : <WifiOff color={palette.warning} size={16} />}
+                      <Text numberOfLines={1} style={styles.syncText}>
+                        {currentLocation ? `Operational Status • ${getLocationLabel(currentLocation)}` : "Operational Status"}
+                      </Text>
+                    </View>
+                  </View>
     for (const row of missionRows) counts.set(getRowCategory(row), (counts.get(getRowCategory(row)) ?? 0) + 1);
     return counts;
   }, [missionCategories, missionRows]);
@@ -224,7 +220,7 @@ function ShopsListScreenContent() {
     return [...unique].sort((left, right) => left.localeCompare(right));
   }, [categoryRows]);
 
-  const rows = useMemo(() => {
+  const filteredRows = useMemo(() => {
     return categoryRows
       .filter((row) => {
         if (activeNeighborhood && getRowNeighborhood(row) !== activeNeighborhood) return false;
@@ -254,6 +250,50 @@ function ShopsListScreenContent() {
         return getRowCreatedAt(right.row) - getRowCreatedAt(left.row);
       });
   }, [activeNeighborhood, categoryRows, currentLocation, normalizedSearch, sortMode]);
+
+  const rows = useMemo(() => {
+    if (focusFilter === "all") {
+      return filteredRows;
+    }
+
+    return filteredRows.filter(({ row }) => {
+      const outcome = getRowOutcome(row);
+
+      if (focusFilter === "hot") {
+        return outcome === "got_manager_number" || outcome === "met_decision_maker";
+      }
+
+      if (focusFilter === "follow_up") {
+        return outcome === "follow_up_later" || outcome === "spoke_to_staff";
+      }
+
+      return outcome === "unknown" || outcome === "no_answer";
+    });
+  }, [filteredRows, focusFilter]);
+
+  const focusCounts = useMemo(() => {
+    let hot = 0;
+    let followUp = 0;
+    let unknown = 0;
+
+    for (const { row } of filteredRows) {
+      const outcome = getRowOutcome(row);
+      if (outcome === "got_manager_number" || outcome === "met_decision_maker") {
+        hot += 1;
+      } else if (outcome === "follow_up_later" || outcome === "spoke_to_staff") {
+        followUp += 1;
+      } else if (outcome === "unknown" || outcome === "no_answer") {
+        unknown += 1;
+      }
+    }
+
+    return {
+      all: filteredRows.length,
+      followUp,
+      hot,
+      unknown,
+    };
+  }, [filteredRows]);
 
   const isLoading = !queueReady || (isFocused && feed === undefined);
 
@@ -317,7 +357,7 @@ function ShopsListScreenContent() {
           navigation.navigate("ShopDetail", { shopId: row.shop._id });
         }}
         previewImageUrl={row.shop.previewImageUrl}
-        statusLabel="Live"
+        statusLabel="Active"
         statusTone="live"
       />
     );
@@ -334,15 +374,6 @@ function ShopsListScreenContent() {
         showsVerticalScrollIndicator={false}
       >
 
-        <View style={styles.syncBar}>
-          <View style={styles.syncRow}>
-            {isOnline ? <Wifi color={palette.success} size={16} /> : <WifiOff color={palette.warning} size={16} />}
-            <Text numberOfLines={1} style={styles.syncText}>
-              {currentLocation ? `Sync Live • ${getLocationLabel(currentLocation)}` : "Sync Live"}
-            </Text>
-          </View>
-        </View>
-
         {isLoading ? (
           <View style={styles.centerState}>
             <ActivityIndicator color={palette.accent} />
@@ -353,7 +384,7 @@ function ShopsListScreenContent() {
             <View style={styles.statsRibbon}>
               <View style={styles.ribbonCard}>
                 <Text style={styles.ribbonValue}>{feed?.length || 0}</Text>
-                <Text style={styles.ribbonLabel}>LIVE LEADS</Text>
+                <Text style={styles.ribbonLabel}>ACTIVE LEADS</Text>
               </View>
               <View style={[styles.ribbonCard, { backgroundColor: "#161719" }]}>
                 <Text style={[styles.ribbonValue, { color: palette.white }]}>{pendingCount}</Text>
@@ -444,6 +475,19 @@ function ShopsListScreenContent() {
               <Text style={styles.sectionTitle}>{activeCategoryLabel}</Text>
               <Text style={styles.sectionMeta}>{rows.length} leads</Text>
             </View>
+
+            <View style={styles.commandCard}>
+              <View style={styles.commandHeader}>
+                <Target color={palette.accentStrong} size={16} />
+                <Text style={styles.commandTitle}>Command focus</Text>
+              </View>
+              <Text style={styles.commandText}>
+                {focusFilter === "all"
+                  ? "View everything in this folder, then switch to a focus lane when you need faster decisions."
+                  : `Showing ${rows.length} ${focusFilter === "hot" ? "hot" : focusFilter === "follow_up" ? "follow-up" : "uncertain"} leads for quick action.`}
+              </Text>
+            </View>
+
             <View style={styles.controlStack}>
               <View style={styles.searchRow}>
                 <View style={styles.searchBox}>
@@ -491,6 +535,28 @@ function ShopsListScreenContent() {
                     onPress={() => setActiveNeighborhood(neighborhood)}
                   />
                 ))}
+              </ScrollView>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                <FocusChip
+                  active={focusFilter === "all"}
+                  label={`All (${focusCounts.all})`}
+                  onPress={() => setFocusFilter("all")}
+                />
+                <FocusChip
+                  active={focusFilter === "hot"}
+                  label={`Hot (${focusCounts.hot})`}
+                  onPress={() => setFocusFilter("hot")}
+                />
+                <FocusChip
+                  active={focusFilter === "follow_up"}
+                  label={`Follow-up (${focusCounts.followUp})`}
+                  onPress={() => setFocusFilter("follow_up")}
+                />
+                <FocusChip
+                  active={focusFilter === "unknown"}
+                  label={`Unknown (${focusCounts.unknown})`}
+                  onPress={() => setFocusFilter("unknown")}
+                />
               </ScrollView>
             </View>
             <FlatList
@@ -572,6 +638,24 @@ function AreaChip({ active, label, onPress }: { active: boolean; label: string; 
       >
         {label}
       </Text>
+    </Pressable>
+  );
+}
+
+function FocusChip({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={() => {
+        void playSelectionHaptic();
+        onPress();
+      }}
+      style={({ pressed }) => [
+        styles.focusChip,
+        active && styles.focusChipActive,
+        pressed && !active && styles.focusChipPressed,
+      ]}
+    >
+      <Text style={[styles.focusChipText, active && styles.focusChipTextActive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -705,6 +789,31 @@ const styles = StyleSheet.create({
   syncText: { flex: 1, fontSize: typography.label, fontWeight: "700", color: palette.ink },
   syncMeta: { fontSize: typography.overline, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
   section: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  commandCard: {
+    gap: spacing.xs,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.surface,
+    padding: spacing.md,
+  },
+  commandHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  commandTitle: {
+    fontSize: typography.overline,
+    fontWeight: "800",
+    color: palette.accentStrong,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  commandText: {
+    fontSize: typography.label,
+    color: palette.mutedInk,
+    lineHeight: 20,
+  },
   controlStack: { gap: spacing.sm },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
   sectionTitle: { fontSize: typography.title, fontWeight: "800", color: palette.ink },
@@ -735,6 +844,29 @@ const styles = StyleSheet.create({
   areaChipText: { fontSize: typography.label, fontWeight: "700", color: palette.ink },
   areaChipTextPrimary: { color: palette.white },
   areaChipTextActive: { color: palette.white },
+  focusChip: {
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 7,
+  },
+  focusChipActive: {
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
+  },
+  focusChipPressed: {
+    backgroundColor: palette.backgroundMuted,
+  },
+  focusChipText: {
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: palette.ink,
+  },
+  focusChipTextActive: {
+    color: palette.white,
+  },
   listContent: { paddingBottom: spacing.xl },
   separator: { height: spacing.sm },
   centerState: { alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl },
