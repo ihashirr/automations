@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import {
   NavigationContainer,
   Theme as NavigationTheme,
@@ -116,11 +116,18 @@ function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
 }
 
 type NavigationRefLike = {
+  isReady: () => boolean;
   canGoBack: () => boolean;
   goBack: () => void;
 };
 
-function AppHeader({ navigationRef }: { navigationRef: NavigationRefLike }) {
+function AppHeader({
+  navigationReady,
+  navigationRef,
+}: {
+  navigationReady: boolean;
+  navigationRef: NavigationRefLike;
+}) {
   const insets = useSafeAreaInsets();
   const { activeCategoryLabel, activeMissionLabel } = useMissionControl();
   const { isOnline, pendingCount } = useCaptureQueue();
@@ -160,7 +167,7 @@ function AppHeader({ navigationRef }: { navigationRef: NavigationRefLike }) {
     subtitle = activeMissionLabel;
   }
 
-  const canGoBack = navigationRef.canGoBack();
+  const canGoBack = navigationReady && navigationRef.isReady() ? navigationRef.canGoBack() : false;
 
   return (
     <View style={[styles.appHeader, { paddingTop: insets.top + spacing.sm }]}>
@@ -169,7 +176,11 @@ function AppHeader({ navigationRef }: { navigationRef: NavigationRefLike }) {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            onPress={() => navigationRef.goBack()}
+            onPress={() => {
+              if (navigationReady && navigationRef.isReady() && navigationRef.canGoBack()) {
+                navigationRef.goBack();
+              }
+            }}
             style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
           >
             <ArrowLeft color={palette.ink} size={18} />
@@ -308,10 +319,16 @@ function MissionsStack() {
   );
 }
 
-function HomeTabs({ navigationRef }: { navigationRef: NavigationRefLike }) {
+function HomeTabs({
+  navigationReady,
+  navigationRef,
+}: {
+  navigationReady: boolean;
+  navigationRef: NavigationRefLike;
+}) {
   return (
     <View style={styles.appShell}>
-      <AppHeader navigationRef={navigationRef} />
+      <AppHeader navigationReady={navigationReady} navigationRef={navigationRef} />
       <View style={styles.appBody}>
         <Tabs.Navigator
           initialRouteName="Capture"
@@ -545,9 +562,14 @@ const styles = StyleSheet.create({
 
 export function AppRoot() {
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
+  const [navigationReady, setNavigationReady] = useState(false);
 
   return (
-    <NavigationContainer ref={navigationRef} theme={navigationTheme}>
+    <NavigationContainer
+      onReady={() => setNavigationReady(true)}
+      ref={navigationRef}
+      theme={navigationTheme}
+    >
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -556,7 +578,9 @@ export function AppRoot() {
           },
         }}
       >
-        <Stack.Screen name="Home">{() => <HomeTabs navigationRef={navigationRef} />}</Stack.Screen>
+        <Stack.Screen name="Home">
+          {() => <HomeTabs navigationReady={navigationReady} navigationRef={navigationRef} />}
+        </Stack.Screen>
         <Stack.Screen component={ShopDetailScreen} name="ShopDetail" />
       </Stack.Navigator>
     </NavigationContainer>
