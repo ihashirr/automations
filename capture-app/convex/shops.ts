@@ -13,6 +13,7 @@ type ResolvedLocation = {
   lat: number;
   lng: number;
   formattedAddress: string;
+  addressLabel?: string;
 } | null;
 
 type NominatimReverseResponse = {
@@ -60,6 +61,10 @@ function normalizeOutcome(value: string) {
   return value;
 }
 
+function formatCoordinateLabel(location: { lat: number; lng: number }) {
+  return `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`;
+}
+
 function buildSearchText(fields: {
   category: string;
   formattedAddress: string;
@@ -95,8 +100,11 @@ function normalizeLocation(location: {
   lat: number;
   lng: number;
   formattedAddress: string;
+  addressLabel?: string;
 }): NonNullable<ResolvedLocation> {
   const formattedAddress = normalizeText(location.formattedAddress);
+  const coordinateLabel = formatCoordinateLabel(location);
+  const normalizedAddressLabel = normalizeText(location.addressLabel ?? "");
 
   if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) {
     throw new Error("Pinned location is invalid.");
@@ -109,7 +117,10 @@ function normalizeLocation(location: {
   return {
     lat: location.lat,
     lng: location.lng,
-    formattedAddress,
+    formattedAddress: isCoordinateLabel(formattedAddress) ? formattedAddress : coordinateLabel,
+    addressLabel:
+      normalizedAddressLabel ||
+      (!isCoordinateLabel(formattedAddress) ? formattedAddress : undefined),
   };
 }
 
@@ -153,7 +164,7 @@ function fallbackNeighborhoodFromAddress(value: string | undefined) {
 
 function resolveLocation(shop: Doc<"shops">): ResolvedLocation {
   if (shop.location) {
-    return shop.location;
+    return normalizeLocation(shop.location);
   }
 
   if (
@@ -164,7 +175,10 @@ function resolveLocation(shop: Doc<"shops">): ResolvedLocation {
     return {
       lat: shop.latitude,
       lng: shop.longitude,
-      formattedAddress: shop.address,
+      formattedAddress: isCoordinateLabel(shop.address)
+        ? normalizeText(shop.address)
+        : formatCoordinateLabel({ lat: shop.latitude, lng: shop.longitude }),
+      addressLabel: !isCoordinateLabel(shop.address) ? normalizeText(shop.address) : undefined,
     };
   }
 
@@ -174,9 +188,17 @@ function resolveLocation(shop: Doc<"shops">): ResolvedLocation {
 function resolveNeighborhood(shop: Doc<"shops">, location: ResolvedLocation) {
   return (
     normalizeNeighborhood(shop.neighborhood) ||
-    fallbackNeighborhoodFromAddress(location?.formattedAddress) ||
+    fallbackNeighborhoodFromAddress(location?.addressLabel ?? location?.formattedAddress) ||
     fallbackNeighborhoodFromAddress(shop.address)
   );
+}
+
+function buildLocationSearchText(location: ResolvedLocation, fallbackAddress?: string) {
+  const values = [location?.addressLabel, location?.formattedAddress, fallbackAddress]
+    .map((value) => normalizeText(value ?? ""))
+    .filter(Boolean);
+
+  return values.filter((value, index) => values.indexOf(value) === index).join(" ");
 }
 
 async function resolveImageUrls(ctx: QueryCtx, shop: Doc<"shops">) {
@@ -325,6 +347,7 @@ export const createShopRecord = internalMutation({
       lat: v.number(),
       lng: v.number(),
       formattedAddress: v.string(),
+      addressLabel: v.optional(v.string()),
     }),
   },
   handler: async (ctx, args) => {
@@ -341,7 +364,9 @@ export const createShopRecord = internalMutation({
     const location = normalizeLocation(args.location);
     const neighborhood = normalizeNeighborhood(args.neighborhood);
     const normalizedName = normalizeIndexText(name);
-    const normalizedNeighborhood = normalizeIndexText(neighborhood || fallbackNeighborhoodFromAddress(location.formattedAddress));
+    const normalizedNeighborhood = normalizeIndexText(
+      neighborhood || fallbackNeighborhoodFromAddress(location.addressLabel ?? location.formattedAddress),
+    );
     const normalizedPhone = normalizePhone(phone);
 
     if (!name) {
@@ -370,7 +395,7 @@ export const createShopRecord = internalMutation({
       location,
       latitude: location.lat,
       longitude: location.lng,
-      address: location.formattedAddress,
+      address: location.addressLabel ?? location.formattedAddress,
       searchText: toSearchTextInput({
         category,
         mission,
@@ -382,7 +407,7 @@ export const createShopRecord = internalMutation({
         referredBy,
         nextStep,
         outcome,
-        formattedAddress: location.formattedAddress,
+        formattedAddress: buildLocationSearchText(location),
       }),
       createdAt,
       updatedAt: createdAt,
@@ -407,13 +432,14 @@ export const createShop = action({
       lat: v.number(),
       lng: v.number(),
       formattedAddress: v.string(),
+      addressLabel: v.optional(v.string()),
     }),
   },
   handler: async (ctx, args): Promise<Id<"shops">> => {
     const location = normalizeLocation(args.location);
     let neighborhood =
       normalizeNeighborhood(args.neighborhood) ||
-      fallbackNeighborhoodFromAddress(location.formattedAddress);
+      fallbackNeighborhoodFromAddress(location.addressLabel ?? location.formattedAddress);
 
     let needsBackgroundEnrichment = false;
 
@@ -455,6 +481,7 @@ export const enrichNeighborhood = internalMutation({
       lat: v.number(),
       lng: v.number(),
       formattedAddress: v.string(),
+      addressLabel: v.optional(v.string()),
     }),
   },
   handler: async (ctx, args) => {
@@ -513,7 +540,7 @@ export const moveShop = mutation({
         referredBy: shop.referredBy,
         nextStep: shop.nextStep ?? "",
         outcome: resolveOutcome(shop),
-        formattedAddress: location?.formattedAddress ?? shop.address ?? "",
+        formattedAddress: buildLocationSearchText(location, shop.address),
       }),
       updatedAt: Date.now(),
     });

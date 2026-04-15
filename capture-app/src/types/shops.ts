@@ -13,6 +13,7 @@ export type CapturedLocation = {
   lat: number;
   lng: number;
   formattedAddress: string;
+  addressLabel?: string;
 };
 
 export type ShopDraft = {

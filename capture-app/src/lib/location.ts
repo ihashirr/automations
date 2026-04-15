@@ -5,7 +5,11 @@ const EARTH_RADIUS_METERS = 6371000;
 export const REVERSE_GEOCODE_TIMEOUT_MS = 1200;
 
 export function formatCoordinateLabel(fallbackCoordinates: { lat: number; lng: number }) {
-  return `${fallbackCoordinates.lat.toFixed(5)}, ${fallbackCoordinates.lng.toFixed(5)}`;
+  return `${fallbackCoordinates.lat.toFixed(6)}, ${fallbackCoordinates.lng.toFixed(6)}`;
+}
+
+function isCoordinateLabel(value: string) {
+  return /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/i.test(value.trim());
 }
 
 export function buildFormattedAddress(
@@ -66,25 +70,7 @@ export async function resolveFormattedAddress(options: {
   reverseGeocode?: () => Promise<LocationGeocodedAddress[]>;
   timeoutMs?: number;
 }) {
-  const { allowReverseGeocode, coordinates, reverseGeocode, timeoutMs = REVERSE_GEOCODE_TIMEOUT_MS } =
-    options;
-
-  if (!allowReverseGeocode || !reverseGeocode) {
-    return formatCoordinateLabel(coordinates);
-  }
-
-  try {
-    const placemark = await Promise.race<LocationGeocodedAddress | null>([
-      reverseGeocode().then((placemarks) => placemarks[0] ?? null),
-      new Promise<LocationGeocodedAddress | null>((resolve) => {
-        setTimeout(() => resolve(null), timeoutMs);
-      }),
-    ]);
-
-    return buildFormattedAddress(placemark, coordinates);
-  } catch {
-    return formatCoordinateLabel(coordinates);
-  }
+  return formatCoordinateLabel(options.coordinates);
 }
 
 export async function resolveLocationDetails(options: {
@@ -95,10 +81,11 @@ export async function resolveLocationDetails(options: {
 }) {
   const { allowReverseGeocode, coordinates, reverseGeocode, timeoutMs = REVERSE_GEOCODE_TIMEOUT_MS } =
     options;
+  const formattedAddress = formatCoordinateLabel(coordinates);
 
   if (!allowReverseGeocode || !reverseGeocode) {
-    const formattedAddress = formatCoordinateLabel(coordinates);
     return {
+      addressLabel: undefined,
       formattedAddress,
       neighborhood: "",
     };
@@ -111,19 +98,42 @@ export async function resolveLocationDetails(options: {
         setTimeout(() => resolve(null), timeoutMs);
       }),
     ]);
-    const formattedAddress = buildFormattedAddress(placemark, coordinates);
+    const resolvedAddress = buildFormattedAddress(placemark, coordinates);
+    const addressLabel =
+      resolvedAddress && !isCoordinateLabel(resolvedAddress) ? resolvedAddress : undefined;
 
     return {
+      addressLabel,
       formattedAddress,
-      neighborhood: extractNeighborhoodName(placemark, formattedAddress),
+      neighborhood: extractNeighborhoodName(placemark, addressLabel ?? formattedAddress),
     };
   } catch {
-    const formattedAddress = formatCoordinateLabel(coordinates);
     return {
+      addressLabel: undefined,
       formattedAddress,
       neighborhood: "",
     };
   }
+}
+
+export function getLocationAreaLabel(location: CapturedLocation | null | undefined) {
+  if (!location) {
+    return null;
+  }
+
+  const addressLabel = location.addressLabel?.trim();
+
+  if (addressLabel) {
+    return addressLabel;
+  }
+
+  const formattedAddress = location.formattedAddress?.trim();
+
+  if (formattedAddress && !isCoordinateLabel(formattedAddress)) {
+    return formattedAddress;
+  }
+
+  return null;
 }
 
 export function getLocationLabel(location: CapturedLocation | null | undefined) {
@@ -131,13 +141,15 @@ export function getLocationLabel(location: CapturedLocation | null | undefined) 
     return null;
   }
 
-  const formattedAddress = location.formattedAddress?.trim();
+  const areaLabel = getLocationAreaLabel(location);
 
-  if (formattedAddress) {
-    return formattedAddress;
+  if (areaLabel) {
+    return areaLabel;
   }
 
-  return formatCoordinateLabel(location);
+  const formattedAddress = location.formattedAddress?.trim();
+
+  return formattedAddress || formatCoordinateLabel(location);
 }
 
 export function isCoordinateOnlyLocation(location: CapturedLocation | null | undefined) {
@@ -145,7 +157,7 @@ export function isCoordinateOnlyLocation(location: CapturedLocation | null | und
     return false;
   }
 
-  return getLocationLabel(location) === formatCoordinateLabel(location);
+  return !getLocationAreaLabel(location) && getLocationLabel(location) === formatCoordinateLabel(location);
 }
 
 export function calculateDistanceMeters(

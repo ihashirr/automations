@@ -41,6 +41,7 @@ export function matchesPendingCapture(capture: PendingCapture, rawQuery: string)
     capture.role ?? "",
     capture.referredBy,
     capture.nextStep ?? "",
+    capture.location?.addressLabel ?? "",
     capture.location?.formattedAddress ?? "",
   ]);
 
@@ -105,7 +106,7 @@ export function formatDistance(distanceMeters: number | null) {
 }
 
 export function formatCoordinates(location: CapturedLocation) {
-  return `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`;
+  return `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`;
 }
 
 export function getInitials(value: string) {

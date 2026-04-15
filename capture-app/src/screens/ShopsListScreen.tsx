@@ -173,15 +173,26 @@ function ShopsListScreenContent() {
       const existingPermission = await Location.getForegroundPermissionsAsync();
       const permission =
         existingPermission.status === "granted"
-        const { flushQueue, isFlushing, pendingCaptures, pendingCount, queueReady, reclassifyPendingCapture } = useCaptureQueue();
-        const [isOnline, setIsOnline] = useState(true);
+          ? existingPermission
+          : await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== "granted") {
+        setLocationIssue("Location permission is needed for nearest sorting.");
+        setSortMode("latest");
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coordinates = { lat: position.coords.latitude, lng: position.coords.longitude };
       const details = await resolveLocationDetails({
         allowReverseGeocode: Platform.OS !== "web",
         coordinates,
         reverseGeocode: () =>
           Location.reverseGeocodeAsync({ latitude: coordinates.lat, longitude: coordinates.lng }),
       });
-      setCurrentLocation({ ...coordinates, formattedAddress: details.formattedAddress });
+      setCurrentLocation({
+        ...coordinates,
+        addressLabel: details.addressLabel,
+        formattedAddress: details.formattedAddress,
+      });
       setLocationIssue(null);
     } catch (error) {
       setLocationIssue(error instanceof Error ? error.message : "Unable to locate you right now.");
@@ -194,14 +205,14 @@ function ShopsListScreenContent() {
   const missionRows = useMemo(() => {
     const pendingRows = pendingCaptures
       .filter((capture) => normalizeSearchText(capture.mission) === normalizeSearchText(activeMissionLabel))
-                  <View style={styles.syncBar}>
-                    <View style={styles.syncRow}>
-                      {isOnline ? <Wifi color={palette.success} size={16} /> : <WifiOff color={palette.warning} size={16} />}
-                      <Text numberOfLines={1} style={styles.syncText}>
-                        {currentLocation ? `Operational Status • ${getLocationLabel(currentLocation)}` : "Operational Status"}
-                      </Text>
-                    </View>
-                  </View>
+      .map<LeadTarget>((capture) => ({ kind: "pending", capture }));
+    const remoteRows = (feed ?? []).map<LeadTarget>((shop: ShopSummary) => ({ kind: "remote", shop }));
+    return [...pendingRows, ...remoteRows];
+  }, [activeMissionLabel, feed, pendingCaptures]);
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const category of missionCategories) counts.set(category.label, 0);
     for (const row of missionRows) counts.set(getRowCategory(row), (counts.get(getRowCategory(row)) ?? 0) + 1);
     return counts;
   }, [missionCategories, missionRows]);

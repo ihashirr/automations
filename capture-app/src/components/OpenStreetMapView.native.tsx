@@ -50,6 +50,11 @@ export function OpenStreetMapView({
   reloadKey,
   style,
 }: OpenStreetMapViewProps) {
+  const centerDependency =
+    mode === "pick"
+      ? reloadKey ?? "default"
+      : `${center.lat.toFixed(5)}:${center.lng.toFixed(5)}`;
+
   const html = useMemo(
     () =>
       buildMapHtml({
@@ -58,8 +63,9 @@ export function OpenStreetMapView({
         markers,
         mode,
       }),
-    [center, currentLocation, markers, mode],
+    [centerDependency, currentLocation, markers, mode],
   );
+  const source = useMemo(() => ({ html }), [html]);
 
   const webViewKey = useMemo(() => {
     const markerKey = markers
@@ -72,11 +78,11 @@ export function OpenStreetMapView({
     return [
       reloadKey ?? "default",
       mode,
-      `${center.lat.toFixed(5)}:${center.lng.toFixed(5)}`,
+      centerDependency,
       currentLocationKey,
       markerKey,
     ].join("::");
-  }, [center, currentLocation, markers, mode, reloadKey]);
+  }, [centerDependency, currentLocation, markers, mode, reloadKey]);
 
   function handleMessage(event: WebViewMessageEvent) {
     try {
@@ -109,7 +115,7 @@ export function OpenStreetMapView({
       originWhitelist={["about:blank", "data:*"]}
       scrollEnabled={false}
       setSupportMultipleWindows={false}
-      source={{ html }}
+      source={source}
       style={[styles.webView, style]}
     />
   );

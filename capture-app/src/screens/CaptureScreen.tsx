@@ -45,7 +45,7 @@ import { useMissionControl } from "../contexts/MissionControlContext";
 import { formatCaptureTime, formatCoordinates, normalizeText, sanitizePhoneInput } from "../lib/format";
 import { playMissionAccomplishedHaptic, playPinSuccessHaptic, playSelectionHaptic } from "../lib/haptics";
 import { mapPickerAssetsToDraftImages } from "../lib/images";
-import { getLocationLabel, resolveLocationDetails } from "../lib/location";
+import { getLocationAreaLabel, getLocationLabel, resolveLocationDetails } from "../lib/location";
 import { DraftImage, DuplicateCandidate, ShopDraft } from "../types/shops";
 
 type FlashState = { tone: "success" | "warning" | "error"; message: string };
@@ -140,7 +140,7 @@ export function CaptureScreen() {
   const phoneRef = useRef<TextInput>(null);
   const nextStepRef = useRef<TextInput>(null);
   const nameRef = useRef<TextInput>(null);
-  const duplicateNeighborhood = draft.neighborhood || draft.location?.formattedAddress.split(",")[0]?.trim() || "";
+  const duplicateNeighborhood = draft.neighborhood || getLocationAreaLabel(draft.location)?.split(",")[0]?.trim() || "";
   const deferredDuplicateName = useDeferredValue(draft.name);
   const deferredDuplicatePhone = useDeferredValue(draft.phone);
   const deferredDuplicateNeighborhood = useDeferredValue(duplicateNeighborhood);
@@ -336,7 +336,11 @@ export function CaptureScreen() {
         coordinates,
         reverseGeocode: () => Location.reverseGeocodeAsync({ latitude: coordinates.lat, longitude: coordinates.lng }),
       });
-      updateField("location", { ...coordinates, formattedAddress: details.formattedAddress });
+      updateField("location", {
+        ...coordinates,
+        addressLabel: details.addressLabel,
+        formattedAddress: details.formattedAddress,
+      });
       updateField("neighborhood", details.neighborhood);
       await playPinSuccessHaptic();
       showFlash("success", "Location saved");

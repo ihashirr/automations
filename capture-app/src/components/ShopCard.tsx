@@ -3,6 +3,7 @@ import { MessageCircleMore, Navigation, Phone } from "lucide-react-native";
 import { getVisitOutcomeLabel, VisitOutcomeValue } from "../constants/visit-outcomes";
 import { buildDialLink, buildWhatsAppLink, formatCaptureTime, getInitials } from "../lib/format";
 import { buildCloudinaryImageUrl } from "../lib/cloudinary";
+import { getLocationAreaLabel } from "../lib/location";
 import { openLocationInMaps } from "../lib/maps";
 import { CapturedLocation } from "../types/shops";
 import { playSelectionHaptic } from "../lib/haptics";
@@ -44,7 +45,7 @@ export function ShopCard({
     : null;
   const hasPhone = phone.trim().length > 0;
   const neighborhoodLabel =
-    neighborhood?.trim() || location?.formattedAddress?.split(",")[0]?.trim() || "Unknown area";
+    neighborhood?.trim() || getLocationAreaLabel(location)?.split(",")[0]?.trim() || "Unknown area";
 
   async function handleCall() {
     if (!hasPhone) {

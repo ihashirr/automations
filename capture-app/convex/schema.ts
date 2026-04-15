@@ -26,6 +26,7 @@ export default defineSchema({
       lat: v.number(),
       lng: v.number(),
       formattedAddress: v.string(),
+      addressLabel: v.optional(v.string()),
     }),
     // Deprecated: keep legacy flat location fields readable until old data is cleaned up.
     latitude: v.optional(v.number()),

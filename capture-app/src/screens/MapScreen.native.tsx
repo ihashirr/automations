@@ -162,6 +162,7 @@ function MapScreenContent() {
 
       setCurrentLocation({
         ...coordinates,
+        addressLabel: details.addressLabel,
         formattedAddress: details.formattedAddress,
       });
     } finally {

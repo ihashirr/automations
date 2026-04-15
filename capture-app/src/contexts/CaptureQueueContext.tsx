@@ -47,6 +47,7 @@ function normalizeDraft(draft: ShopDraft): ShopDraft {
     location: draft.location
       ? {
           ...draft.location,
+          addressLabel: normalizeText(draft.location.addressLabel ?? "") || undefined,
           formattedAddress: normalizeText(draft.location.formattedAddress),
         }
       : null,
