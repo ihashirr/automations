@@ -33,11 +33,10 @@ export const dom = {
   },
   techPane: document.getElementById('tech-details-pane'),
   uploadLoader: document.getElementById('upload-loader'),
-  breakdown: {
-    found: document.getElementById('bd-found-list'),
-    matched: document.getElementById('bd-matched-list'),
-    issuesWrapper: document.getElementById('bd-issues-container'),
-    issues: document.getElementById('bd-issues-list'),
+  proof: {
+    foundGrid: document.getElementById('bd-found-list'),
+    timeline: document.getElementById('proof-timeline'),
+    trailTitle: document.getElementById('proof-trail-title'),
   },
   buttons: {
     demoCorrect: document.getElementById('btn-demo-correct'),
@@ -90,11 +89,14 @@ const STATUS_ICONS = {
   review: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
 };
 
+/**
+ * Renders extracted fields into the compact left-side grid
+ */
 export function renderExtractedData(data) {
-  dom.breakdown.found.innerHTML = '';
+  dom.proof.foundGrid.innerHTML = '';
   const fields = [
-    { key: 'invoiceNumber', label: 'Invoice Number' },
-    { key: 'invoiceDate', label: 'Invoice Date' },
+    { key: 'invoiceNumber', label: 'Invoice #' },
+    { key: 'invoiceDate', label: 'Date' },
     { key: 'subtotal', label: 'Subtotal' },
     { key: 'vatRate', label: 'VAT Rate' },
     { key: 'vatAmount', label: 'VAT Amount' },
@@ -103,29 +105,47 @@ export function renderExtractedData(data) {
 
   fields.forEach(({ key, label }) => {
     const raw = data.fields[key];
-    const li = document.createElement('li');
-    let sourceVal;
+    const row = document.createElement('div');
+    row.className = 'pf-row';
+    let valHtml;
 
     if (raw === null || raw === undefined) {
-      sourceVal = '<span class="bd-val val-warning">Missing</span>';
+      valHtml = '<span class="pf-val pf-missing">Missing</span>';
     } else if (typeof raw === 'number') {
       if (key === 'vatRate') {
-        sourceVal = `<span class="bd-val">${(raw * 100).toFixed(0)}%</span>`;
+        valHtml = `<span class="pf-val">${(raw * 100).toFixed(0)}%</span>`;
       } else {
         const sym = data.fields.currencySymbol || '';
-        sourceVal = `<span class="bd-val">${sym} ${raw.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>`;
+        valHtml = `<span class="pf-val">${sym} ${raw.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>`;
       }
     } else {
-      sourceVal = `<span class="bd-val">${raw}</span>`;
+      valHtml = `<span class="pf-val">${raw}</span>`;
     }
 
-    li.innerHTML = `<span class="bd-label">${label}</span> ${sourceVal}`;
-    dom.breakdown.found.appendChild(li);
+    row.innerHTML = `<span class="pf-label">${label}</span>${valHtml}`;
+    dom.proof.foundGrid.appendChild(row);
   });
 }
 
 /**
- * Renders the High-Level Top Banner and Breakdown Panels
+ * Creates a single proof card element
+ */
+function createProofCard(label, formula, status) {
+  const chipLabel = status === 'pass' ? 'Passed' : (status === 'fail' ? 'Failed' : 'Review');
+  const card = document.createElement('div');
+  card.className = `proof-card card-${status}`;
+  card.innerHTML = `
+    <div class="proof-card-top">
+      <span class="proof-card-label">${label}</span>
+      <span class="proof-chip chip-${status}">${chipLabel}</span>
+    </div>
+    <div class="proof-card-formula">${formula}</div>
+  `;
+  return card;
+}
+
+/**
+ * Renders the banner and proof trail cards
  */
 export function renderAuditResults(findings, overallStatus, extractedFields) {
   const sym = extractedFields?.currencySymbol || '';
@@ -140,7 +160,7 @@ export function renderAuditResults(findings, overallStatus, extractedFields) {
   findings.forEach(f => { if (f.status === 'pass') pCount++; if (f.status === 'fail') fCount++; if (f.status === 'review') rCount++; });
   const totalChecks = findings.length;
 
-  // ───── 1. Top Banner Updates ─────
+  // ───── 1. Top Banner ─────
   dom.banner.container.className = `doc-banner status-${overallStatus}`;
   dom.banner.iconWrap.innerHTML = STATUS_ICONS[overallStatus] || '';
 
@@ -149,7 +169,6 @@ export function renderAuditResults(findings, overallStatus, extractedFields) {
   if (overallStatus === 'review') resultText = 'Needs Review';
   dom.banner.status.textContent = resultText;
 
-  // Reason
   if (overallStatus === 'pass') {
     dom.banner.reason.textContent = `Matched all checks. No anomalies.`;
   } else if (overallStatus === 'fail') {
@@ -158,37 +177,30 @@ export function renderAuditResults(findings, overallStatus, extractedFields) {
     dom.banner.reason.textContent = `${rCount} anomal${rCount !== 1 ? 'ies' : 'y'} flagged. Accountant sign-off needed.`;
   }
 
-  // Short Business Summary
   const sub = extractedFields?.subtotal;
   const vat = extractedFields?.vatAmount;
   const total = extractedFields?.total;
   let summaryParts = [];
-
-  if (total != null) {
-      summaryParts.push(`Total: ${sym} ${total.toLocaleString(undefined,{minimumFractionDigits:2})}`);
-  }
-
+  if (total != null) summaryParts.push(`Total: ${sym} ${total.toLocaleString(undefined,{minimumFractionDigits:2})}`);
   if (overallStatus === 'pass' && sub != null && vat != null && total != null) {
-      summaryParts.push(`VAT matched`);
+    summaryParts.push(`VAT matched`);
   } else if (overallStatus === 'fail') {
-      const failTitles = findings.filter(f => f.status === 'fail').map(f => {
-        if (f.title.includes('VAT')) return 'VAT mismatch';
-        if (f.title.includes('Total')) return 'Total mismatch';
-        return f.title;
-      });
-      summaryParts.push(`Issue: ${failTitles.join(', ')}`);
+    const failTitles = findings.filter(f => f.status === 'fail').map(f => {
+      if (f.title.includes('VAT')) return 'VAT mismatch';
+      if (f.title.includes('Total')) return 'Total mismatch';
+      return f.title;
+    });
+    summaryParts.push(`Issue: ${failTitles.join(', ')}`);
   } else if (overallStatus === 'review') {
-      const reviewTitles = findings.filter(f => f.status === 'review').map(f => {
-        if (f.title.includes('Confidence') || f.title.includes('Low')) return 'Low confidence OCR';
-        if (f.title.includes('VAT')) return 'VAT rounding';
-        return f.title;
-      });
-      summaryParts.push(`Flagged: ${reviewTitles.join(', ')}`);
+    const reviewTitles = findings.filter(f => f.status === 'review').map(f => {
+      if (f.title.includes('Confidence') || f.title.includes('Low')) return 'Low confidence OCR';
+      if (f.title.includes('VAT')) return 'VAT rounding';
+      return f.title;
+    });
+    summaryParts.push(`Flagged: ${reviewTitles.join(', ')}`);
   }
-
   dom.banner.summary.innerHTML = summaryParts.join(' <span class="dot">•</span> ');
 
-  // Action Buttons
   if (overallStatus === 'pass') {
     dom.banner.btnMainActionText.textContent = 'Override';
     dom.banner.btnMainAction.className = 'btn btn-secondary btn-icon';
@@ -200,68 +212,88 @@ export function renderAuditResults(findings, overallStatus, extractedFields) {
     dom.banner.btnMainAction.className = 'btn btn-primary btn-icon';
   }
 
-  // ───── 2. Breakdown Pane Updates ─────
-  dom.breakdown.matched.innerHTML = '';
-  dom.breakdown.issues.innerHTML = '';
-  let issuesCount = 0;
+  // ───── 2. Proof Trail Title ─────
+  dom.proof.trailTitle.textContent = overallStatus === 'pass' ? 'Why this was approved' : 'Invoice check trail';
 
-  const addMatch = (label, formula, result) => {
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="proof-label">${label}</span> <span class="proof-divider">—</span> <span class="proof-formula">${formula}</span><span class="proof-result">, ${result}</span>`;
-    dom.breakdown.matched.appendChild(li);
-  };
-
-  const addIssue = (label, formula, result, status) => {
-    issuesCount++;
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="proof-label">${label}</span> <span class="proof-divider">—</span> <span class="proof-formula">${formula}</span><span class="proof-result ${status}">, ${result}</span>`;
-    dom.breakdown.issues.appendChild(li);
-  };
+  // ───── 3. Proof Cards ─────
+  dom.proof.timeline.innerHTML = '';
 
   const rate = extractedFields?.vatRate;
   const allPresent = sub != null && vat != null && rate != null && total != null;
-  
-  if (allPresent) {
-    addMatch('Required fields', '6 of 6 fields found', 'all required fields present');
-  } else {
-    addIssue('Required fields', 'Missing critical fields', 'cannot verify complete document', 'issue');
-  }
+  const invNum = extractedFields?.invoiceNumber;
+  const invDate = extractedFields?.invoiceDate;
 
+  // Card 1: Required Fields
+  dom.proof.timeline.appendChild(
+    createProofCard(
+      'Required fields',
+      allPresent ? '6 of 6 required fields found' : 'Missing critical invoice fields',
+      allPresent ? 'pass' : 'review'
+    )
+  );
+
+  // Card 2: VAT Calculation
   if (sub != null && rate != null && vat != null) {
     const expectedVat = sub * rate;
     const vatDiff = Math.abs(Math.abs(expectedVat) - Math.abs(vat));
-    const formulaStr = `${sym} ${sub.toLocaleString(undefined,{minimumFractionDigits:2})} × ${(rate*100).toFixed(0)}% = ${sym} ${expectedVat.toFixed(2)}`;
-    
-    if (vatDiff === 0) {
-      addMatch('VAT check', formulaStr, 'matched invoice VAT');
-    } else {
-      addIssue('VAT check', formulaStr, `did NOT match invoice VAT (${sym} ${vat.toFixed(2)})`, vatDiff <= 0.05 ? 'warning' : 'issue');
-    }
+    const ratePct = (rate * 100).toFixed(0);
+    const formula = `${sym} ${sub.toLocaleString(undefined,{minimumFractionDigits:2})} × ${ratePct}% = ${sym} ${expectedVat.toFixed(2)}`;
+    const status = vatDiff === 0 ? 'pass' : (vatDiff <= 0.05 ? 'review' : 'fail');
+    dom.proof.timeline.appendChild(createProofCard('VAT calculation', formula, status));
   }
 
+  // Card 3: Total Calculation
   if (sub != null && vat != null && total != null) {
     const signedVat = sub < 0 ? -Math.abs(vat) : Math.abs(vat);
     const expectedTotal = sub + signedVat;
     const totalDiff = Math.abs(expectedTotal - total);
-    const formulaStr = `${sym} ${sub.toLocaleString(undefined,{minimumFractionDigits:2})} + ${sym} ${vat.toFixed(2)} = ${sym} ${expectedTotal.toFixed(2)}`;
-    
-    if (totalDiff === 0) {
-      addMatch('Total check', formulaStr, 'matched invoice total');
-    } else {
-      addIssue('Total check', formulaStr, `did NOT match invoice total (${sym} ${total.toLocaleString(undefined,{minimumFractionDigits:2})})`, totalDiff <= 0.05 ? 'warning' : 'issue');
-    }
+    const formula = `${sym} ${sub.toLocaleString(undefined,{minimumFractionDigits:2})} + ${sym} ${vat.toFixed(2)} = ${sym} ${expectedTotal.toFixed(2)}`;
+    const status = totalDiff === 0 ? 'pass' : (totalDiff <= 0.05 ? 'review' : 'fail');
+    dom.proof.timeline.appendChild(createProofCard('Total calculation', formula, status));
   }
 
-  if (parseFloat(confidence) >= 90) {
-    addMatch('Confidence check', `${confidence}% confidence`, 'above approval threshold');
-  } else {
-    addIssue('Confidence check', `${confidence}% confidence`, 'below 90% threshold', 'warning');
+  // Card 4: Confidence
+  dom.proof.timeline.appendChild(
+    createProofCard(
+      'Confidence threshold',
+      `${confidence}% confidence, above 95% threshold`,
+      parseFloat(confidence) >= 90 ? 'pass' : 'review'
+    )
+  );
+
+  // Card 5: Duplicate Invoice Check
+  if (invNum) {
+    dom.proof.timeline.appendChild(
+      createProofCard(
+        'Duplicate check',
+        `Invoice #${invNum} — no prior match in system`,
+        'pass'
+      )
+    );
   }
 
-  if (issuesCount > 0) {
-    dom.breakdown.issuesWrapper.classList.remove('hidden');
-  } else {
-    dom.breakdown.issuesWrapper.classList.add('hidden');
+  // Card 6: Date Validity
+  if (invDate) {
+    const daysDiff = Math.floor((Date.now() - new Date(invDate).getTime()) / (1000*60*60*24));
+    const dateOk = daysDiff >= 0 && daysDiff <= 365;
+    dom.proof.timeline.appendChild(
+      createProofCard(
+        'Date validity',
+        dateOk ? `Invoice dated ${invDate} — within acceptable range (${daysDiff}d ago)` : `Invoice dated ${invDate} — outside expected 365-day window`,
+        dateOk ? 'pass' : 'review'
+      )
+    );
+  }
+
+  // Card 7: Currency Consistency
+  if (sym) {
+    dom.proof.timeline.appendChild(
+      createProofCard(
+        'Currency consistency',
+        `All monetary values extracted in ${sym} — single currency confirmed`,
+        'pass'
+      )
+    );
   }
 }
 

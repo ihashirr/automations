@@ -496,57 +496,138 @@ body {
 .tech-details-inner {
   overflow: hidden;
 }
-.breakdown-container {
+/* ===== Proof Container ===== */
+.proof-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 24px;
-  padding: 24px;
+  grid-template-columns: 260px 1fr;
+  gap: 0;
 }
-.bd-group h4 {
+
+/* -- Extracted Fields (left compact column) -- */
+.proof-extracted {
+  padding: 24px;
+  border-right: 1px solid var(--border);
+}
+.proof-extracted h4,
+.proof-trail h4 {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-dim);
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
-.bd-list { display: flex; flex-direction: column; gap: 10px; list-style: none; }
-.bd-list li {
-  font-size: 13px;
-  display: flex; justify-content: space-between; align-items: flex-start;
-  gap: 12px; line-height: 1.4;
+.proof-extracted-grid {
+  display: flex; flex-direction: column; gap: 8px;
 }
-.bd-label { color: var(--text-muted); flex: 1; }
-.bd-val { font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: var(--text); text-align: right; }
-.bd-list-success .bd-val { color: var(--success); }
-.bd-list-warning .bd-val, .bd-list .bd-val.val-warning { color: var(--danger); }
-.bd-list-review .bd-val, .bd-list .bd-val.val-review { color: var(--warning); }
-.bd-group.hidden { display: none; }
-.bd-group.bd-group-wide { grid-column: 1 / -1; }
+.proof-extracted-grid .pf-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font-size: 12px;
+}
+.pf-row .pf-label { color: var(--text-muted); }
+.pf-row .pf-val { font-weight: 600; color: var(--text); font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; }
+.pf-row .pf-val.pf-missing { color: var(--danger); font-weight: 500; }
 
-/* Proof Rows */
-ul.proof-list li {
-  display: block; 
-  font-size: 13px; color: var(--text-muted);
+/* -- Proof Trail (right main column) -- */
+.proof-trail {
+  padding: 24px;
 }
-.proof-label {
-  display: inline-block;
+
+/* Timeline */
+.proof-timeline {
+  position: relative;
+  padding-left: 24px;
 }
-.proof-divider {
-  margin: 0 6px; color: var(--text-muted); opacity: 0.5;
+.proof-timeline::before {
+  content: '';
+  position: absolute;
+  left: 5px; top: 4px; bottom: 4px;
+  width: 2px;
+  background: var(--border);
+  border-radius: 2px;
 }
-.proof-formula {
-  font-weight: 700; color: var(--text);
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 13px;
+
+/* Individual proof card */
+.proof-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: proofReveal 0.35s ease forwards;
 }
-.proof-result {
-  color: var(--success); font-weight: 500; font-size: 13px;
+.proof-card:last-child { margin-bottom: 0; }
+
+/* Timeline dot */
+.proof-card::before {
+  content: '';
+  position: absolute;
+  left: -24px; top: 18px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--bg-raised);
+  border: 2px solid var(--border);
+  z-index: 1;
 }
-.proof-result.issue { color: var(--danger); }
-.proof-result.warning { color: var(--warning); }
+.proof-card.card-pass::before { border-color: var(--success); background: color-mix(in srgb, var(--success) 20%, transparent); }
+.proof-card.card-fail::before { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 20%, transparent); }
+.proof-card.card-review::before { border-color: var(--warning); background: color-mix(in srgb, var(--warning) 20%, transparent); }
+
+/* Card layout */
+.proof-card-top {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 6px;
+}
+.proof-card-label {
+  font-size: 12px; color: var(--text-muted); font-weight: 500;
+}
+.proof-chip {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 3px 10px; border-radius: 20px;
+}
+.proof-chip.chip-pass { background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--success); }
+.proof-chip.chip-fail { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.proof-chip.chip-review { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--warning); }
+
+.proof-card-formula {
+  font-size: 14px; font-weight: 700; line-height: 1.5;
+  color: var(--text);
+  font-family: 'SF Mono','Fira Code',monospace;
+  animation: formulaHighlight 0.6s ease 0.35s both;
+}
+
+/* Staggered reveal */
+@keyframes proofReveal {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes formulaHighlight {
+  0%   { color: var(--accent); }
+  100% { color: var(--text); }
+}
+.proof-card:nth-child(1) { animation-delay: 0ms; }
+.proof-card:nth-child(1) .proof-card-formula { animation-delay: 0.35s; }
+.proof-card:nth-child(2) { animation-delay: 140ms; }
+.proof-card:nth-child(2) .proof-card-formula { animation-delay: 0.49s; }
+.proof-card:nth-child(3) { animation-delay: 280ms; }
+.proof-card:nth-child(3) .proof-card-formula { animation-delay: 0.63s; }
+.proof-card:nth-child(4) { animation-delay: 420ms; }
+.proof-card:nth-child(4) .proof-card-formula { animation-delay: 0.77s; }
+.proof-card:nth-child(5) { animation-delay: 560ms; }
+.proof-card:nth-child(5) .proof-card-formula { animation-delay: 0.91s; }
+.proof-card:nth-child(6) { animation-delay: 700ms; }
+.proof-card:nth-child(6) .proof-card-formula { animation-delay: 1.05s; }
+.proof-card:nth-child(7) { animation-delay: 840ms; }
+.proof-card:nth-child(7) .proof-card-formula { animation-delay: 1.19s; }
+
+@media (max-width: 900px) {
+  .proof-container { grid-template-columns: 1fr; }
+  .proof-extracted { border-right: none; border-bottom: 1px solid var(--border); }
+}
 
 /* ===== PDF Viewer ===== */
 .doc-preview {

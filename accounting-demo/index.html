@@ -292,31 +292,25 @@
 					</div>
 
 					<!-- Expandable Technical Details Pane -->
-					<div id="tech-details-pane" class="tech-details-pane collapsed">
-						<div class="tech-details-inner">
-							<div class="breakdown-container">
-								
-								<!-- What was found -->
-								<div class="bd-group">
-									<h4>What Was Found</h4>
-									<ul class="bd-list" id="bd-found-list"></ul>
-								</div>
-
-								<!-- What matched -->
-								<div class="bd-group bd-group-wide">
-									<h4>How we verified this invoice</h4>
-									<ul class="bd-list proof-list" id="bd-matched-list"></ul>
-								</div>
-
-								<!-- What failed / Needs review -->
-								<div class="bd-group bd-group-wide hidden" id="bd-issues-container">
-									<h4>Attention Required</h4>
-									<ul class="bd-list proof-list" id="bd-issues-list"></ul>
-								</div>
-
+				<div id="tech-details-pane" class="tech-details-pane collapsed">
+					<div class="tech-details-inner">
+						<div class="proof-container">
+							
+							<!-- Extracted data compact row -->
+							<div class="proof-extracted">
+								<h4>What Was Found</h4>
+								<div class="proof-extracted-grid" id="bd-found-list"></div>
 							</div>
+
+							<!-- Proof Trail -->
+							<div class="proof-trail">
+								<h4 id="proof-trail-title">Why this was approved</h4>
+								<div class="proof-timeline" id="proof-timeline"></div>
+							</div>
+
 						</div>
 					</div>
+				</div>
 
 					<!-- PDF Viewer -->
 					<div class="doc-preview">

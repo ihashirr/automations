@@ -230,11 +230,9 @@ function selectDocument(id) {
     dom.banner.container.className = 'doc-banner status-loading';
     dom.banner.iconWrap.innerHTML = '<div class="spinner" style="width:20px;height:20px;margin:0;border-width:2px;border-color:currentColor;border-top-color:transparent;"></div>';
     
-    // Clear lists
-    dom.breakdown.found.innerHTML = '<li><span class="bd-label">Extracting data...</span></li>';
-    dom.breakdown.matched.innerHTML = '';
-    dom.breakdown.issues.innerHTML = '';
-    dom.breakdown.issuesWrapper.classList.add('hidden');
+    // Clear proof trail
+    dom.proof.foundGrid.innerHTML = '<div class="pf-row"><span class="pf-label">Extracting data...</span></div>';
+    dom.proof.timeline.innerHTML = '';
 
   } else {
     renderExtractedData(doc.extractedData);
