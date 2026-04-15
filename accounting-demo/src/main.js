@@ -55,6 +55,19 @@ function bindEvents() {
     }
   });
 
+  // Topbar Home / Logo
+  const homeLink = document.getElementById('topbar-home');
+  if (homeLink) {
+    homeLink.addEventListener('click', () => {
+      showStep('upload');
+      selectedDocId = null;
+      reRenderQueue();
+      // Reset workspace to empty state
+      dom.layout.emptyState.classList.remove('hidden');
+      dom.layout.docView.classList.add('hidden');
+    });
+  }
+
   // Topbar Add Files
   if (dom.buttons.addFiles) {
     dom.buttons.addFiles.addEventListener('click', () => dom.inputs.realFileUpload.click());
