@@ -82,6 +82,7 @@ Indexes:
 
 See the docs index in `docs/README.md`.
 Architecture details live in `docs/architecture/technical-architecture.md`.
+Navigation and UX baseline lives in `docs/architecture/navigation-experience.md`.
 Operational Convex rules live in `docs/operations/convex-bandwidth-rules.md`.
 
 ## Setup

@@ -30,6 +30,13 @@ export function MissionHubScreen() {
           pressed && styles.missionCardPressed
         ]}
       >
+        <View style={styles.cardEyebrowRow}>
+          <Text style={styles.cardEyebrow}>Operational Module</Text>
+          <View style={styles.cardPulse}>
+            <Text style={styles.cardPulseText}>Ready</Text>
+          </View>
+        </View>
+
         <View style={styles.cardHeader}>
           <View style={styles.iconBox}>
             <LayoutDashboard color={palette.accent} size={22} />
@@ -53,7 +60,7 @@ export function MissionHubScreen() {
         </View>
 
         <View style={styles.resumeButton}>
-          <Text style={styles.resumeButtonText}>Launch Mission</Text>
+          <Text style={styles.resumeButtonText}>Enter Module</Text>
           <Zap color={palette.white} size={14} fill={palette.white} />
         </View>
       </Pressable>
@@ -76,15 +83,24 @@ export function MissionHubScreen() {
           { paddingBottom: insets.bottom + 100 }
         ]}
         ListHeaderComponent={
-          <View style={styles.hubSummary}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>{missionCatalog.length}</Text>
-              <Text style={styles.summaryLabel}>Active Missions</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>24/7</Text>
-              <Text style={styles.summaryLabel}>Sync Engine</Text>
+          <View style={styles.heroPanel}>
+            <View style={styles.heroGlow} />
+            <Text style={styles.heroEyebrow}>FIELD SUITE</Text>
+            <Text style={styles.heroTitle}>Choose a module and keep the day moving.</Text>
+            <Text style={styles.heroBody}>
+              Capture fresh leads, keep folders clean, and route the team from one calmer command surface.
+            </Text>
+
+            <View style={styles.hubSummary}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>{missionCatalog.length}</Text>
+                <Text style={styles.summaryLabel}>Active Missions</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryValue}>24/7</Text>
+                <Text style={styles.summaryLabel}>Sync Engine</Text>
+              </View>
             </View>
           </View>
         }
@@ -100,20 +116,17 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    backgroundColor: palette.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.line,
+    paddingBottom: spacing.md,
   },
   headerEyebrow: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800",
-    color: palette.accent,
+    color: palette.accentStrong,
     letterSpacing: 2,
     marginBottom: 4,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: "800",
     color: palette.ink,
   },
@@ -121,13 +134,50 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.lg,
   },
+  heroPanel: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: radii.lg,
+    backgroundColor: palette.hero,
+    padding: spacing.xl,
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  heroGlow: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    top: -24,
+    right: -32,
+    backgroundColor: "rgba(240, 181, 143, 0.18)",
+  },
+  heroEyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: "#F4C8B0",
+    textTransform: "uppercase",
+  },
+  heroTitle: {
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: "900",
+    color: palette.white,
+    maxWidth: "88%",
+  },
+  heroBody: {
+    fontSize: typography.label,
+    lineHeight: 22,
+    color: "rgba(255,255,255,0.7)",
+    maxWidth: "84%",
+  },
   hubSummary: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#161719",
-    borderRadius: radii.lg,
-    padding: spacing.xl,
-    marginBottom: spacing.sm,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: radii.md,
+    padding: spacing.lg,
   },
   summaryItem: {
     flex: 1,
@@ -142,30 +192,55 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#B4AC9F",
+    color: "rgba(255,255,255,0.6)",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
   summaryDivider: {
     width: 1,
     height: 30,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  cardEyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  cardEyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: palette.mutedInk,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+  },
+  cardPulse: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    backgroundColor: palette.accentSoft,
+  },
+  cardPulseText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: palette.accentStrong,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
   },
   missionCard: {
-    backgroundColor: palette.surface,
+    backgroundColor: palette.card,
     borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: palette.line,
-    padding: spacing.lg,
+    padding: spacing.xl,
     gap: spacing.lg,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
+    shadowColor: "#18161D",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 22,
+    elevation: 6,
   },
   missionCardPressed: {
-    backgroundColor: palette.backgroundMuted,
+    backgroundColor: "#FFF5EE",
     transform: [{ scale: 0.98 }],
   },
   cardHeader: {
@@ -174,9 +249,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
+    width: 54,
+    height: 54,
+    borderRadius: 18,
     backgroundColor: palette.accentSoft,
     alignItems: "center",
     justifyContent: "center",
@@ -186,12 +261,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   missionTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "800",
     color: palette.ink,
   },
   missionSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     color: palette.mutedInk,
     fontWeight: "600",
   },
@@ -211,9 +286,9 @@ const styles = StyleSheet.create({
     color: palette.mutedInk,
   },
   resumeButton: {
-    height: 48,
+    height: 52,
     borderRadius: radii.md,
-    backgroundColor: palette.accent,
+    backgroundColor: palette.hero,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

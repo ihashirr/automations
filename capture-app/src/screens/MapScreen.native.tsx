@@ -1,16 +1,15 @@
-import Constants from "expo-constants";
 import * as Location from "expo-location";
 import { useIsFocused } from "@react-navigation/native";
 import { useQuery } from "convex/react";
-import { LocateFixed, MapPinned, Navigation, Phone } from "lucide-react-native";
+import { LocateFixed, Navigation, Phone } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import MapView, { Marker, Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../convex/_generated/api";
+import { OpenStreetMapView } from "../components/OpenStreetMapView.native";
 import { ScreenErrorBoundary } from "../components/ScreenErrorBoundary";
 import { defaultMission } from "../constants/missions";
-import { palette, radii, spacing, typography } from "../constants/theme";
+import { palette, spacing } from "../constants/theme";
 import { useCaptureQueue } from "../contexts/CaptureQueueContext";
 import { useMissionControl } from "../contexts/MissionControlContext";
 import { buildDialLink } from "../lib/format";
@@ -27,15 +26,9 @@ type LeadPin = {
   status: "live" | "queued";
 };
 
-type ExpoExtra = {
-  googleMapsConfigured?: boolean;
-};
-
-const DEFAULT_REGION: Region = {
-  latitude: 24.4539,
-  longitude: 54.3773,
-  latitudeDelta: 0.08,
-  longitudeDelta: 0.08,
+const DEFAULT_CENTER = {
+  lat: 24.4539,
+  lng: 54.3773,
 };
 
 export function MapScreen() {
@@ -58,12 +51,10 @@ function MapScreenContent() {
   const [currentLocation, setCurrentLocation] = useState<CapturedLocation | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LeadPin | null>(null);
-  const isMapConfigured =
-    (Constants.expoConfig?.extra as ExpoExtra | undefined)?.googleMapsConfigured === true;
 
   const feed = useQuery(
     api.shops.listMissionMapPins,
-    isFocused && isMapConfigured
+    isFocused
       ? {
           mission: activeMissionLabel,
           category: activeCategoryLabel ?? undefined,
@@ -102,20 +93,29 @@ function MapScreenContent() {
     return [...queuedPins, ...livePins];
   }, [activeCategoryLabel, activeMissionLabel, feed, pendingCaptures]);
 
-  const region = useMemo<Region>(() => {
+  const mapCenter = useMemo(() => {
     const anchor = currentLocation ?? pins[0]?.location;
 
     if (!anchor) {
-      return DEFAULT_REGION;
+      return DEFAULT_CENTER;
     }
 
     return {
-      latitude: anchor.lat,
-      longitude: anchor.lng,
-      latitudeDelta: 0.04,
-      longitudeDelta: 0.04,
+      lat: anchor.lat,
+      lng: anchor.lng,
     };
   }, [currentLocation, pins]);
+
+  const mapMarkers = useMemo(
+    () =>
+      pins.map((pin) => ({
+        id: pin.id,
+        lat: pin.location.lat,
+        lng: pin.location.lng,
+        tone: pin.status,
+      })),
+    [pins],
+  );
 
   useEffect(() => {
     if (!selectedLead) {
@@ -169,59 +169,25 @@ function MapScreenContent() {
     }
   }
 
-  if (!isMapConfigured) {
-    return (
-      <View style={styles.missingShell}>
-        <View style={styles.missingCard}>
-          <View style={styles.missingIconWrap}>
-            <MapPinned color={palette.white} size={22} />
-          </View>
-          <Text style={styles.missingTitle}>Google Maps key missing</Text>
-          <Text style={styles.missingBody}>
-            Set `GOOGLE_MAPS_API_KEY` or `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`, then rebuild Android.
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <MapView
-        initialRegion={region}
-        key={`${region.latitude}-${region.longitude}-${pins.length}`}
-        showsMyLocationButton={false}
-        showsUserLocation
+      <OpenStreetMapView
+        center={mapCenter}
+        currentLocation={currentLocation}
+        markers={mapMarkers}
+        onMarkerPress={(markerId) => {
+          const nextLead = pins.find((pin) => pin.id === markerId) ?? null;
+
+          if (!nextLead) {
+            return;
+          }
+
+          void playSelectionHaptic();
+          setSelectedLead(nextLead);
+        }}
+        reloadKey={`${activeMissionLabel}-${activeCategoryLabel ?? "all"}-${pins.length}-${currentLocation?.lat ?? "none"}-${currentLocation?.lng ?? "none"}`}
         style={StyleSheet.absoluteFill}
-        customMapStyle={mapStyle}
-      >
-        {pins.map((pin) => (
-          <Marker
-            anchor={{ x: 0.5, y: 0.5 }}
-            coordinate={{
-              latitude: pin.location.lat,
-              longitude: pin.location.lng,
-            }}
-            key={pin.id}
-            onPress={() => {
-              void playSelectionHaptic();
-              setSelectedLead(pin);
-            }}
-          >
-            <View style={[
-              styles.markerRing,
-              pin.status === "queued" && styles.markerRingQueued,
-              selectedLead?.id === pin.id && styles.markerRingSelected
-            ]}>
-              <View style={[
-                styles.markerDot,
-                pin.status === "queued" && styles.markerDotQueued,
-                selectedLead?.id === pin.id && styles.markerDotSelected
-              ]} />
-            </View>
-          </Marker>
-        ))}
-      </MapView>
+      />
 
       <View style={[styles.topOverlay, { paddingTop: insets.top + spacing.sm }]}>
         <View style={styles.missionPill}>
@@ -299,53 +265,10 @@ function MapScreenContent() {
   );
 }
 
-const mapStyle = [
-  {
-    "featureType": "poi",
-    "elementType": "labels",
-    "stylers": [{ "visibility": "off" }]
-  }
-];
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#161719",
-  },
-  missingShell: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.xl,
-    backgroundColor: "#161719",
-  },
-  missingCard: {
-    width: "100%",
-    borderRadius: 28,
-    padding: spacing.xl,
-    gap: spacing.md,
-    backgroundColor: "#1C1D1F",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  missingIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#E96B39",
-  },
-  missingTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: palette.white,
-  },
-  missingBody: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: palette.mutedInk,
-    fontWeight: "600",
   },
   topOverlay: {
     position: "absolute",
@@ -399,42 +322,6 @@ const styles = StyleSheet.create({
   },
   glassButtonPressed: {
     backgroundColor: "rgba(255, 255, 255, 0.1)",
-  },
-  markerRing: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "rgba(233, 107, 57, 0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(233, 107, 57, 0.4)",
-  },
-  markerRingQueued: {
-    backgroundColor: "rgba(199, 193, 181, 0.2)",
-    borderColor: "rgba(199, 193, 181, 0.4)",
-  },
-  markerRingSelected: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(233, 107, 57, 0.4)",
-    borderColor: "#E96B39",
-  },
-  markerDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#E96B39",
-  },
-  markerDotQueued: {
-    backgroundColor: "#C7C1B5",
-  },
-  markerDotSelected: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#E96B39",
   },
   quickInfo: {
     position: "absolute",

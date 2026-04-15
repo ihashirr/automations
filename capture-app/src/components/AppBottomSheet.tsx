@@ -61,15 +61,15 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(17,24,39,0.18)",
+    backgroundColor: "rgba(24,22,29,0.24)",
   },
   sheet: {
     gap: spacing.md,
     borderTopLeftRadius: radii.lg,
     borderTopRightRadius: radii.lg,
     borderWidth: 1,
-    borderColor: palette.line,
-    backgroundColor: palette.surface,
+    borderColor: "rgba(24, 22, 29, 0.08)",
+    backgroundColor: palette.card,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     ...shadows.card,
@@ -88,6 +88,7 @@ const styles = StyleSheet.create({
     fontSize: typography.title,
     fontWeight: "800",
     color: palette.ink,
+    letterSpacing: -0.3,
   },
   description: {
     fontSize: typography.label,
@@ -100,7 +101,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: palette.backgroundMuted,
+    backgroundColor: palette.surfaceStrong,
   },
   closeButtonPressed: {
     opacity: 0.8,

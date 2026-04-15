@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import MapView, { Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, X } from "lucide-react-native";
 import { palette, radii, shadows, spacing, typography } from "../constants/theme";
 import { playSelectionHaptic } from "../lib/haptics";
 import { formatCoordinateLabel } from "../lib/location";
+import { OpenStreetMapView } from "./OpenStreetMapView.native";
 
 type Coordinates = { lat: number; lng: number };
 
@@ -16,21 +16,12 @@ type CaptureMapPickerProps = {
   visible: boolean;
 };
 
-const DELTA = { latitudeDelta: 0.01, longitudeDelta: 0.01 };
-
 export function CaptureMapPicker({ initialCoordinates, onClose, onConfirm, visible }: CaptureMapPickerProps) {
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
   const [markerCoordinates, setMarkerCoordinates] = useState<Coordinates | null>(initialCoordinates);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [mapReloadKey, setMapReloadKey] = useState(0);
   const latestCoordinatesRef = useRef<Coordinates | null>(initialCoordinates);
-
-  function regionToCoordinates(region: Region): Coordinates {
-    return {
-      lat: region.latitude,
-      lng: region.longitude,
-    };
-  }
 
   function syncCoordinatesNow(coordinates: Coordinates) {
     latestCoordinatesRef.current = coordinates;
@@ -38,10 +29,13 @@ export function CaptureMapPicker({ initialCoordinates, onClose, onConfirm, visib
   }
 
   useEffect(() => {
-    if (!visible || !initialCoordinates) return;
+    if (!visible || !initialCoordinates) {
+      return;
+    }
+
     latestCoordinatesRef.current = initialCoordinates;
     setMarkerCoordinates(initialCoordinates);
-    mapRef.current?.animateToRegion({ latitude: initialCoordinates.lat, longitude: initialCoordinates.lng, ...DELTA }, 250);
+    setMapReloadKey((current) => current + 1);
   }, [initialCoordinates, visible]);
 
   async function handleConfirm() {
@@ -61,18 +55,11 @@ export function CaptureMapPicker({ initialCoordinates, onClose, onConfirm, visib
     <Modal animationType="slide" presentationStyle="fullScreen" visible={visible}>
       <View style={styles.container}>
         {markerCoordinates ? (
-          <MapView
-            ref={mapRef}
-            initialRegion={{ latitude: markerCoordinates.lat, longitude: markerCoordinates.lng, ...DELTA }}
-            onRegionChange={(region) => {
-              latestCoordinatesRef.current = regionToCoordinates(region);
-            }}
-            onRegionChangeComplete={(region) => {
-              syncCoordinatesNow(regionToCoordinates(region));
-            }}
-            showsCompass={false}
-            showsMyLocationButton={false}
-            showsUserLocation
+          <OpenStreetMapView
+            center={markerCoordinates}
+            mode="pick"
+            onCenterChange={syncCoordinatesNow}
+            reloadKey={`${mapReloadKey}`}
             style={StyleSheet.absoluteFill}
           />
         ) : (
@@ -101,7 +88,7 @@ export function CaptureMapPicker({ initialCoordinates, onClose, onConfirm, visib
         <View style={[styles.bottomCard, { paddingBottom: insets.bottom + spacing.lg }]}>
           <Text style={styles.label}>Selected Coordinates</Text>
           <Text style={styles.coordinates}>{markerCoordinates ? formatCoordinateLabel(markerCoordinates) : "Locating..."}</Text>
-          <Text style={styles.helper}>Move the map until the pin sits on the exact spot, then confirm the location.</Text>
+          <Text style={styles.helper}>Move the map until the center pin sits on the exact spot, then confirm the location.</Text>
           <Pressable disabled={!markerCoordinates || isConfirming} onPress={() => { void playSelectionHaptic(); void handleConfirm(); }} style={({ pressed }) => [styles.confirmButton, (!markerCoordinates || isConfirming) && styles.confirmButtonDisabled, pressed && markerCoordinates && !isConfirming && styles.confirmButtonPressed]}>
             {isConfirming ? <ActivityIndicator color={palette.white} /> : <><Check color={palette.white} size={18} /><Text style={styles.confirmText}>Confirm Location</Text></>}
           </Pressable>

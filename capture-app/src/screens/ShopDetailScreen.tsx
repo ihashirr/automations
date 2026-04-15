@@ -146,7 +146,7 @@ function ShopDetailScreenContent({ navigation, route }: Props) {
               <Text style={styles.detailValue}>{getLocationLabel(shop.location)}</Text>
             </View>
             <Text style={styles.coordinateText}>{formatCoordinates(shop.location)}</Text>
-            <Text style={styles.locationHint}>View in Google Maps</Text>
+            <Text style={styles.locationHint}>Open in Maps</Text>
           </Pressable>
         ) : (
           <View style={styles.detailCard}>

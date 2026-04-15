@@ -1,4 +1,4 @@
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { MessageCircleMore, Navigation, Phone } from "lucide-react-native";
 import { getVisitOutcomeLabel, VisitOutcomeValue } from "../constants/visit-outcomes";
 import { buildDialLink, buildWhatsAppLink, formatCaptureTime, getInitials } from "../lib/format";
@@ -74,25 +74,37 @@ export function ShopCard({
 
   const content = (
     <View style={styles.contentWrap}>
-      <View style={styles.mainInfo}>
-        <View style={styles.titleRow}>
-          <Text numberOfLines={1} style={styles.name}>
-            {name}
-          </Text>
-          {distanceLabel ? (
-            <View style={styles.distancePill}>
-              <Text style={styles.distanceText}>{distanceLabel}</Text>
-            </View>
-          ) : null}
-        </View>
-        <Text numberOfLines={1} style={styles.subtext}>
-          {contactPerson || "No decision maker"} • {neighborhoodLabel}
-        </Text>
-        <View style={styles.metaRow}>
-          <View style={styles.outcomePill}>
-            <Text style={styles.outcomeText}>{getVisitOutcomeLabel(outcome)}</Text>
+      <View style={styles.heroRow}>
+        {resolvedPreviewImageUrl ? (
+          <Image source={{ uri: resolvedPreviewImageUrl }} style={styles.previewImage} />
+        ) : (
+          <View style={styles.previewFallback}>
+            <Text style={styles.previewInitials}>{getInitials(name)}</Text>
           </View>
-          <Text style={styles.timestamp}>{formatCaptureTime(createdAt)}</Text>
+        )}
+
+        <View style={styles.mainInfo}>
+          <View style={styles.titleRow}>
+            <Text numberOfLines={1} style={styles.name}>
+              {name}
+            </Text>
+            {distanceLabel ? (
+              <View style={styles.distancePill}>
+                <Text style={styles.distanceText}>{distanceLabel}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <Text numberOfLines={1} style={styles.subtext}>
+            {contactPerson || "No decision maker"} • {neighborhoodLabel}
+          </Text>
+
+          <View style={styles.metaRow}>
+            <View style={styles.outcomePill}>
+              <Text style={styles.outcomeText}>{getVisitOutcomeLabel(outcome)}</Text>
+            </View>
+            <Text style={styles.timestamp}>{formatCaptureTime(createdAt)}</Text>
+          </View>
         </View>
       </View>
 
@@ -135,6 +147,11 @@ export function ShopCard({
           <Navigation color={location ? palette.ink : palette.mutedInk} size={18} strokeWidth={2} />
         </Pressable>
         <View style={styles.flexSpacer} />
+        <View style={[styles.statusPill, statusTone === "queued" && styles.statusPillQueued]}>
+          <Text style={[styles.statusPillText, statusTone === "queued" && styles.statusPillTextQueued]}>
+            {statusLabel}
+          </Text>
+        </View>
         <View
           style={[styles.statusDot, statusTone === "queued" && styles.statusDotQueued]}
         />
@@ -174,26 +191,52 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: palette.line,
-    backgroundColor: palette.surface,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: palette.card,
+    shadowColor: "#18161D",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 6,
     overflow: "hidden",
   },
   cardPressed: {
-    backgroundColor: palette.backgroundMuted,
+    backgroundColor: "#FFF4EC",
   },
   cardQueued: {
-    borderColor: "#F1B08F",
-    backgroundColor: "#FFFBF9",
+    borderColor: "#EDB497",
+    backgroundColor: "#FFF8F3",
   },
   contentWrap: {
     padding: spacing.md,
     gap: spacing.sm,
   },
+  heroRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    alignItems: "center",
+  },
+  previewImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: palette.surfaceStrong,
+  },
+  previewFallback: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.hero,
+  },
+  previewInitials: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: palette.white,
+    letterSpacing: 0.5,
+  },
   mainInfo: {
+    flex: 1,
     gap: 2,
   },
   titleRow: {
@@ -223,7 +266,7 @@ const styles = StyleSheet.create({
   subtext: {
     fontSize: 14,
     color: palette.mutedInk,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   metaRow: {
     flexDirection: "row",
@@ -264,6 +307,25 @@ const styles = StyleSheet.create({
   },
   flexSpacer: {
     flex: 1,
+  },
+  statusPill: {
+    borderRadius: radii.pill,
+    backgroundColor: palette.successSoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+  },
+  statusPillQueued: {
+    backgroundColor: palette.warningSoft,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: palette.success,
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+  },
+  statusPillTextQueued: {
+    color: palette.warning,
   },
   statusDot: {
     width: 8,

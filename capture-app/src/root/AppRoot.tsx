@@ -8,7 +8,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { FolderOpen, Map, Plus } from "lucide-react-native";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { palette } from "../constants/theme";
+import { palette, radii, spacing } from "../constants/theme";
 import { useMissionControl } from "../contexts/MissionControlContext";
 import { playSelectionHaptic } from "../lib/haptics";
 import { HomeTabParamList, MissionsStackParamList, RootStackParamList } from "../navigation/types";
@@ -135,9 +135,13 @@ function CommandTabButton({
         void playSelectionHaptic();
         onPress();
       }}
-      style={({ pressed }) => [styles.sideTabButton, pressed && styles.sideTabButtonPressed]}
+      style={({ pressed }) => [
+        styles.sideTabButton,
+        focused && styles.sideTabButtonActive,
+        pressed && styles.sideTabButtonPressed,
+      ]}
     >
-      {icon}
+      <View style={[styles.sideTabIconWrap, focused && styles.sideTabIconWrapActive]}>{icon}</View>
       <Text style={[styles.sideTabLabel, focused && styles.sideTabLabelActive]}>{label}</Text>
     </Pressable>
   );
@@ -268,32 +272,61 @@ const styles = StyleSheet.create({
     color: palette.ink,
   },
   tabBarShell: {
-    backgroundColor: palette.white,
-    borderTopColor: "#E0DBCF",
-    borderTopWidth: 1,
-    paddingHorizontal: 18,
-    paddingTop: 6,
+    backgroundColor: "transparent",
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
   },
   tabBarSurface: {
-    minHeight: 64,
+    minHeight: 82,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    borderRadius: 32,
+    borderWidth: 1,
+    borderColor: "rgba(24, 22, 29, 0.08)",
+    backgroundColor: "rgba(255, 249, 242, 0.96)",
+    paddingHorizontal: spacing.sm,
+    ...(Platform.OS === "web"
+      ? {
+          boxShadow: "0px 22px 40px rgba(24, 22, 29, 0.14)",
+        }
+      : {
+          shadowColor: "#18161D",
+          shadowOffset: { width: 0, height: 14 },
+          shadowOpacity: 0.14,
+          shadowRadius: 28,
+          elevation: 18,
+        }),
   },
   sideTabButton: {
     flex: 1,
-    minHeight: 56,
+    minHeight: 58,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: 6,
+    borderRadius: radii.md,
+  },
+  sideTabButtonActive: {
+    backgroundColor: "rgba(217, 102, 58, 0.08)",
+  },
+  sideTabIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sideTabIconWrapActive: {
+    backgroundColor: palette.accentSoft,
   },
   sideTabButtonPressed: {
     opacity: 0.8,
   },
   sideTabLabel: {
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 11,
+    fontWeight: "800",
     color: palette.mutedInk,
+    letterSpacing: 0.3,
   },
   sideTabLabelActive: {
     color: palette.ink,
@@ -311,24 +344,27 @@ const styles = StyleSheet.create({
   captureTabWrap: {
     alignItems: "center",
     justifyContent: "center",
+    marginTop: -28,
   },
   captureTabButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: palette.accent,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 6,
+    borderColor: palette.background,
     ...(Platform.OS === "web"
       ? {
-          boxShadow: "0px 10px 18px rgba(28, 28, 30, 0.18)",
+          boxShadow: "0px 18px 28px rgba(24, 22, 29, 0.22)",
         }
       : {
-          shadowColor: "#1C1C1E",
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.18,
-          shadowRadius: 14,
-          elevation: 8,
+          shadowColor: "#18161D",
+          shadowOffset: { width: 0, height: 12 },
+          shadowOpacity: 0.22,
+          shadowRadius: 18,
+          elevation: 12,
         }),
   },
   captureTabButtonActive: {

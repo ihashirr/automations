@@ -1,8 +1,4 @@
 const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL?.trim() || undefined;
-const googleMapsApiKey =
-  process.env.GOOGLE_MAPS_API_KEY?.trim() ||
-  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
-  undefined;
 
 export default {
   expo: {
@@ -59,24 +55,12 @@ export default {
             "Allow Lead Capture to save captured shop contacts to your phone.",
         },
       ],
-      ...(googleMapsApiKey
-        ? [
-            [
-              "react-native-maps",
-              {
-                androidGoogleMapsApiKey: googleMapsApiKey,
-                iosGoogleMapsApiKey: googleMapsApiKey,
-              },
-            ] as const,
-          ]
-        : []),
     ],
     web: {
       favicon: "./assets/favicon.png",
     },
     extra: {
       convexUrl: convexUrl ?? null,
-      googleMapsConfigured: Boolean(googleMapsApiKey),
       eas: {
         projectId: "55c89b48-19ea-4350-ae7f-6d52340200f7",
       },
