@@ -329,16 +329,17 @@ function getTriageReason(doc) {
 
   const reasons = [];
   doc.findings.forEach(f => {
+    const text = f.label || '';
     if (f.status === 'fail') {
-      if (f.title.includes('VAT')) reasons.push('VAT mismatch');
-      else if (f.title.includes('Total')) reasons.push('Total mismatch');
-      else if (f.title.includes('Extraction') || f.title.includes('Error')) reasons.push('Extraction error');
-      else reasons.push(f.title);
+      if (text.includes('VAT')) reasons.push('VAT mismatch');
+      else if (text.includes('Total')) reasons.push('Total mismatch');
+      else if (text.includes('Extraction') || text.includes('Error') || text.includes('System')) reasons.push('System error');
+      else reasons.push(text);
     } else if (f.status === 'review') {
-      if (f.title.includes('Confidence') || f.title.includes('Low')) reasons.push('Low OCR confidence');
-      else if (f.title.includes('VAT')) reasons.push('VAT rounding');
-      else if (f.title.includes('Total')) reasons.push('Total rounding');
-      else reasons.push(f.title);
+      if (text.includes('Confidence') || text.includes('Low')) reasons.push('Low confidence');
+      else if (text.includes('VAT')) reasons.push('VAT rounding');
+      else if (text.includes('Total')) reasons.push('Total rounding');
+      else reasons.push(text);
     }
   });
 

@@ -11,7 +11,7 @@ let sortMode = 'time';
 let detailsPaneOpen = false;
 let activeRuleSet = 'uaeVatStandard';
 let showOnlyExceptions = false;
-import { runRuleSet } from './validation.js';
+import { runRuleSet, getOverallStatus } from './validation.js';
 import { ruleSets } from './ruleSets.js';
 
 // Simulated historical data
@@ -224,15 +224,10 @@ async function processDocument(id) {
     if (overall === 'review' || overall === 'fail') globalMetrics.review++;
     globalMetrics.timeSavedHours += 0.03;
     updateKPIs(globalMetrics);
-
-    doc.extractedData = extracted;
-    doc.findings = findings;
-    doc.overallStatus = overall;
-
   } catch(e) {
     console.error("Processing failed:", doc.fileName, e);
     doc.overallStatus = 'fail';
-    doc.findings = [{ title: 'Extraction Error', desc: String(e), status: 'fail' }];
+    doc.findings = [{ label: 'System Error', formula: String(e), status: 'fail' }];
   }
 
   reRenderQueue();
