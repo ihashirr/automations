@@ -107,13 +107,17 @@ export function OpenStreetMapView({
 
   return (
     <WebView
+      androidLayerType="hardware"
       javaScriptEnabled
       domStorageEnabled
       key={webViewKey}
       onMessage={handleMessage}
       onShouldStartLoadWithRequest={handleShouldStartLoad}
       originWhitelist={["about:blank", "data:*"]}
+      scalesPageToFit={false}
       scrollEnabled={false}
+      setBuiltInZoomControls={false}
+      setDisplayZoomControls={false}
       setSupportMultipleWindows={false}
       source={source}
       style={[styles.webView, style]}
@@ -134,6 +138,9 @@ function buildMapHtml(options: {
       : options.markers.length > 0 || options.currentLocation
         ? 16
         : 14;
+  const touchZoomMode = JSON.stringify(options.mode === "pick" ? "center" : true);
+  const doubleClickZoomMode = JSON.stringify(options.mode === "pick" ? "center" : true);
+  const scrollWheelZoomMode = JSON.stringify(options.mode === "pick" ? "center" : true);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -266,9 +273,13 @@ function buildMapHtml(options: {
 
       const map = L.map("map", {
         attributionControl: true,
+        bounceAtZoomLimits: false,
+        doubleClickZoom: ${doubleClickZoomMode},
         fadeAnimation: false,
         markerZoomAnimation: true,
         preferCanvas: false,
+        scrollWheelZoom: ${scrollWheelZoomMode},
+        touchZoom: ${touchZoomMode},
         zoomAnimation: true,
         zoomControl: true,
         zoomDelta: 0.5,

@@ -2,7 +2,7 @@
 
 ## 1. System Overview
 
-Capture App is an Expo React Native application backed by Convex.
+Leadit is an Expo React Native application backed by Convex.
 
 The architecture is split into:
 - UI layer (screens + components)

@@ -1,6 +1,6 @@
-# Capture App
+# Leadit
 
-Mission-driven lead capture app built with Expo + React Native and Convex.
+Leadit is a mission-driven lead capture app built with Expo + React Native and Convex.
 
 This app is designed for fast field execution:
 - Capture a lead in seconds.

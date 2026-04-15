@@ -2,8 +2,8 @@ const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL?.trim() || undefined;
 
 export default {
   expo: {
-    name: "capture-app",
-    slug: "capture-app",
+    name: "Leadit",
+    slug: "leadit",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -12,7 +12,7 @@ export default {
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
-      backgroundColor: "#ffffff",
+      backgroundColor: "#1E1A1D",
     },
     ios: {
       supportsTablet: true,
@@ -21,7 +21,7 @@ export default {
       package: "com.ihash.captureapp",
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#ffffff",
+        backgroundColor: "#1E1A1D",
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
@@ -37,22 +37,22 @@ export default {
       [
         "expo-image-picker",
         {
-          cameraPermission: "Allow Lead Capture to take shop photos.",
-          photosPermission: "Allow Lead Capture to attach existing shop photos.",
+          cameraPermission: "Allow Leadit to take shop photos.",
+          photosPermission: "Allow Leadit to attach existing shop photos.",
         },
       ],
       [
         "expo-location",
         {
           locationWhenInUsePermission:
-            "Allow Lead Capture to pin shop locations while you are working in the field.",
+            "Allow Leadit to pin shop locations while you are working in the field.",
         },
       ],
       [
         "expo-contacts",
         {
           contactsPermission:
-            "Allow Lead Capture to save captured shop contacts to your phone.",
+            "Allow Leadit to save captured shop contacts to your phone.",
         },
       ],
     ],

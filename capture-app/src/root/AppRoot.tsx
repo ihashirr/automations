@@ -11,7 +11,7 @@ import {
 } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ArrowLeft, FolderOpen, Map, Plus } from "lucide-react-native";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette, radii, spacing } from "../constants/theme";
 import { useCaptureQueue } from "../contexts/CaptureQueueContext";
@@ -137,7 +137,7 @@ function AppHeader({
   const activeTabRoute = rootRoute.name === "Home" ? rootRoute.state?.routes[rootRoute.state.index] : null;
   const activeTabName = activeTabRoute?.name ?? rootRoute.name;
 
-  let eyebrow = "CAPTURE APP";
+  let eyebrow = "FIELD SUITE";
   let title = "Field Command";
   let subtitle = activeMissionLabel;
 
@@ -201,6 +201,10 @@ function AppHeader({
       </View>
 
       <View style={styles.appHeaderCopy}>
+        <View style={styles.brandRow}>
+          <Image source={require("../../assets/leadit-mark.png")} style={styles.brandMark} />
+          <Text style={styles.brandName}>Leadit</Text>
+        </View>
         <Text style={styles.appHeaderEyebrow}>{eyebrow}</Text>
         <Text numberOfLines={1} style={styles.appHeaderTitle}>
           {title}
@@ -438,6 +442,23 @@ const styles = StyleSheet.create({
   },
   appHeaderCopy: {
     gap: 2,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  brandMark: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+  },
+  brandName: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: palette.ink,
+    letterSpacing: 0.2,
   },
   appHeaderEyebrow: {
     fontSize: 11,
