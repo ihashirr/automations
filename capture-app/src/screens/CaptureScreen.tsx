@@ -32,8 +32,6 @@ import {
   Images,
   MapPinned,
   Navigation,
-  SignalHigh,
-  SignalZero,
   Trash2,
 } from "lucide-react-native";
 import { api } from "../../convex/_generated/api";
@@ -118,12 +116,14 @@ export function CaptureScreen() {
     getMissionCategories,
     startCategoryMission,
   } = useMissionControl();
-  const { isOnline, pendingCaptures, pendingCount, saveCapture } = useCaptureQueue();
+  const { pendingCaptures, pendingCount, saveCapture } = useCaptureQueue();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<ShopDraft>(() => createEmptyDraft(activeMissionLabel, activeCategoryLabel));
   const [flashState, setFlashState] = useState<FlashState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
+  const [phoneState, setPhoneState] = useState<"got" | "none">("got");
   const [isResolvingLocation, setIsResolvingLocation] = useState(false);
   const [isPreparingMap, setIsPreparingMap] = useState(false);
   const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
@@ -207,6 +207,17 @@ export function CaptureScreen() {
   const missingLocation = !draft.location;
   const missingOutcome = !draft.outcome;
   const isReadyToSave = !missingName && !missingLocation && !missingOutcome;
+  const completedRequiredCount = Number(!missingName) + Number(!missingLocation) + Number(!missingOutcome);
+  const remainingRequiredCount = 3 - completedRequiredCount;
+  const nextRequiredAction = missingName
+    ? "Add shop name"
+    : missingLocation
+      ? "Pin shop location"
+      : missingOutcome
+        ? "Select visit outcome"
+        : "All required fields completed";
+  const captureProgressPercent = Math.round((completedRequiredCount / 3) * 100);
+  const displayAdvancedDetails = showAdvancedDetails || draft.outcome === "follow_up_later";
 
   useEffect(() => {
     if (!flashState) return;
@@ -264,6 +275,7 @@ export function CaptureScreen() {
 
   useEffect(() => {
     setDraft((current) => (isDraftPristine(current) ? createEmptyDraft(activeMissionLabel, activeCategoryLabel) : current));
+    setPhoneState("got");
   }, [activeCategoryLabel, activeMissionLabel]);
 
   useEffect(() => {
@@ -288,11 +300,14 @@ export function CaptureScreen() {
 
   function handleNumberToggle(nextState: "got" | "none") {
     if (nextState === "got") {
+      setPhoneState("got");
       phoneRef.current?.focus();
       return;
     }
 
+    setPhoneState("none");
     updateField("phone", "");
+    phoneRef.current?.blur();
   }
 
   function applyFolderSelection(missionId: string, categoryId: string) {
@@ -456,21 +471,36 @@ export function CaptureScreen() {
   }
 
   const selectedCategoryId = getCategoryIdFromLabel(pickerMissionId, draft.category) ?? (pickerMissionId === activeMissionId ? activeCategoryId : null);
+  const flashToneMeta = flashState
+    ? flashState.tone === "success"
+      ? { title: "Saved", toneStyle: styles.toastToneSuccess, indicatorStyle: styles.toastIndicatorSuccess }
+      : flashState.tone === "warning"
+        ? { title: "Heads up", toneStyle: styles.toastToneWarning, indicatorStyle: styles.toastIndicatorWarning }
+        : { title: "Action needed", toneStyle: styles.toastToneError, indicatorStyle: styles.toastIndicatorError }
+    : null;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
       <View style={styles.screen}>
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 156 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={styles.quickStrip}>
-            <View style={styles.syncChip}>
-              {isOnline ? <SignalHigh color={COLORS.success} size={14} /> : <SignalZero color={COLORS.warning} size={14} />}
-              <Text style={styles.syncChipText}>{isOnline ? "Live" : "Queueing"}</Text>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 168 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={styles.completionCard}>
+            <View style={styles.completionHeader}>
+              <Text style={styles.completionTitle}>Capture progress</Text>
+              <Text style={styles.completionMeta}>{pendingCount > 0 ? `${pendingCount} queued` : "Queue clear"}</Text>
             </View>
-            {pendingCount > 0 ? (
-              <View style={styles.pendingChip}>
-                <Text style={styles.pendingChipText}>{pendingCount} pending</Text>
-              </View>
-            ) : null}
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${captureProgressPercent}%` }]} />
+            </View>
+            <View style={styles.readinessRow}>
+              <ReadinessPill attention={showValidation && missingName} complete={!missingName} label="Shop name" />
+              <ReadinessPill attention={showValidation && missingLocation} complete={!missingLocation} label="Location" />
+              <ReadinessPill attention={showValidation && missingOutcome} complete={!missingOutcome} label="Outcome" />
+            </View>
+            <Text style={styles.completionHint}>
+              {remainingRequiredCount > 0
+                ? `${remainingRequiredCount} required ${remainingRequiredCount === 1 ? "item" : "items"} left: ${nextRequiredAction}`
+                : "Ready to save and continue to your next visit."}
+            </Text>
           </View>
 
           <View style={styles.priorityCard}>
@@ -604,11 +634,11 @@ export function CaptureScreen() {
                     }}
                     style={({ pressed }) => [
                       styles.toggleChip,
-                      hasPhone && styles.toggleChipActive,
-                      pressed && !hasPhone && styles.pressedOpacity,
+                      phoneState === "got" && styles.toggleChipActive,
+                      pressed && phoneState !== "got" && styles.pressedOpacity,
                     ]}
                   >
-                    <Text style={[styles.toggleChipText, hasPhone && styles.toggleChipTextActive]}>Got number</Text>
+                    <Text style={[styles.toggleChipText, phoneState === "got" && styles.toggleChipTextActive]}>Got number</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => {
@@ -617,11 +647,11 @@ export function CaptureScreen() {
                     }}
                     style={({ pressed }) => [
                       styles.toggleChip,
-                      !hasPhone && styles.toggleChipMutedActive,
-                      pressed && hasPhone && styles.pressedOpacity,
+                      phoneState === "none" && styles.toggleChipMutedActive,
+                      pressed && phoneState !== "none" && styles.pressedOpacity,
                     ]}
                   >
-                    <Text style={[styles.toggleChipText, !hasPhone && styles.toggleChipTextMutedActive]}>No number</Text>
+                    <Text style={[styles.toggleChipText, phoneState === "none" && styles.toggleChipTextMutedActive]}>No number</Text>
                   </Pressable>
                 </View>
               </View>
@@ -629,14 +659,22 @@ export function CaptureScreen() {
                 keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
                 onChangeText={(value) => updateField("phone", value)}
                 onBlur={() => setFocusedField(null)}
-                onFocus={() => setFocusedField("phone")}
+                onFocus={() => {
+                  setPhoneState("got");
+                  setFocusedField("phone");
+                }}
                 onSubmitEditing={() => nextStepRef.current?.focus()}
-                placeholder="Phone number"
+                editable={phoneState !== "none"}
+                placeholder={phoneState === "none" ? "No phone number selected" : "Phone number"}
                 placeholderTextColor={COLORS.textMuted}
                 ref={phoneRef}
                 returnKeyType="next"
-                textContentType="telephoneNumber"
-                style={[styles.inputDense, focusedField === "phone" && styles.inputFocused]}
+                textContentType={phoneState === "none" ? undefined : "telephoneNumber"}
+                style={[
+                  styles.inputDense,
+                  phoneState === "none" && styles.inputDisabled,
+                  focusedField === "phone" && styles.inputFocused,
+                ]}
                 value={draft.phone}
               />
             </View>
@@ -685,61 +723,77 @@ export function CaptureScreen() {
               ))}
             </View>
             {showValidation && missingOutcome ? <Text style={styles.inlineError}>Outcome is required.</Text> : null}
-            <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Next step</Text>
-              <TextInput
-                autoCapitalize="sentences"
-                onChangeText={(value) => updateField("nextStep", value)}
-                onBlur={() => setFocusedField(null)}
-                onFocus={() => setFocusedField("nextStep")}
-                placeholder="Call back, revisit, send WhatsApp..."
-                placeholderTextColor={COLORS.textMuted}
-                ref={nextStepRef}
-                returnKeyType="done"
-                style={[styles.inputDense, focusedField === "nextStep" && styles.inputFocused]}
-                value={draft.nextStep ?? ""}
-              />
-            </View>
-          </View>
+            <Pressable
+              onPress={() => {
+                void playSelectionHaptic();
+                setShowAdvancedDetails((current) => !current);
+              }}
+              style={({ pressed }) => [styles.moreDetailsToggle, pressed && styles.pressedOpacity]}
+            >
+              <View>
+                <Text style={styles.moreDetailsTitle}>{displayAdvancedDetails ? "Hide extra details" : "Add more details"}</Text>
+                <Text style={styles.moreDetailsMeta}>Next step and photo are optional.</Text>
+              </View>
+              <ChevronDown color={COLORS.textMuted} size={16} style={displayAdvancedDetails ? styles.chevronOpen : undefined} />
+            </Pressable>
 
-          <View style={styles.card}>
-            <View style={styles.cardTopRow}>
-              <Text style={styles.eyebrow}>Photo</Text>
-              <Text style={styles.cardMeta}>Optional</Text>
-            </View>
-            {draft.images.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbnailRow}>
-                {draft.images.map((img, idx) => (
-                  <View key={`${img.localUri}-${idx}`} style={styles.thumbnailFrame}>
-                    <Image source={{ uri: img.localUri }} style={styles.thumbnailImage} />
-                    <Pressable onPress={() => { void playSelectionHaptic(); updateField("images", draft.images.filter((_, i) => i !== idx)); }} style={styles.thumbnailRemove}>
-                      <Trash2 color={COLORS.bg} size={14} />
-                    </Pressable>
+            {displayAdvancedDetails ? (
+              <View style={styles.extraDetailsCard}>
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>Next step</Text>
+                  <TextInput
+                    autoCapitalize="sentences"
+                    onChangeText={(value) => updateField("nextStep", value)}
+                    onBlur={() => setFocusedField(null)}
+                    onFocus={() => setFocusedField("nextStep")}
+                    placeholder="What happens next?"
+                    placeholderTextColor={COLORS.textMuted}
+                    ref={nextStepRef}
+                    returnKeyType="done"
+                    style={[styles.inputDense, focusedField === "nextStep" && styles.inputFocused]}
+                    value={draft.nextStep ?? ""}
+                  />
+                </View>
+
+                <View style={styles.card}>
+                  <View style={styles.cardTopRow}>
+                    <Text style={styles.eyebrow}>Photo</Text>
+                    <Text style={styles.cardMeta}>Optional</Text>
                   </View>
-                ))}
-                <Pressable onPress={() => { void playSelectionHaptic(); void requestCameraAndCapture(); }} style={({ pressed }) => [styles.thumbnailAddTile, pressed && styles.pressedOpacity]}>
-                  <Camera color={COLORS.text} size={24} />
-                </Pressable>
-              </ScrollView>
-            ) : (
-              <Pressable onPress={() => { void playSelectionHaptic(); void requestCameraAndCapture(); }} style={({ pressed }) => [styles.captureAreaSmall, pressed && styles.pressedBg]}>
-                <Camera color={COLORS.text} size={24} />
-                <Text style={styles.capturePrimaryText}>Add storefront photo</Text>
-              </Pressable>
-            )}
-            <View style={styles.photoActions}>
-              <PrimaryAction icon={<Camera size={16} color={palette.white} />} label="Camera" onPress={() => void requestCameraAndCapture()} />
-              <SecondaryAction icon={<Images size={16} color={COLORS.text} />} label="Library" onPress={() => void requestLibraryAndPick()} />
-            </View>
+                  {draft.images.length > 0 ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbnailRow}>
+                      {draft.images.map((img, idx) => (
+                        <View key={`${img.localUri}-${idx}`} style={styles.thumbnailFrame}>
+                          <Image source={{ uri: img.localUri }} style={styles.thumbnailImage} />
+                          <Pressable onPress={() => { void playSelectionHaptic(); updateField("images", draft.images.filter((_, i) => i !== idx)); }} style={styles.thumbnailRemove}>
+                            <Trash2 color={COLORS.bg} size={14} />
+                          </Pressable>
+                        </View>
+                      ))}
+                      <Pressable onPress={() => { void playSelectionHaptic(); void requestCameraAndCapture(); }} style={({ pressed }) => [styles.thumbnailAddTile, pressed && styles.pressedOpacity]}>
+                        <Camera color={COLORS.text} size={24} />
+                      </Pressable>
+                    </ScrollView>
+                  ) : (
+                    <Pressable onPress={() => { void playSelectionHaptic(); void requestCameraAndCapture(); }} style={({ pressed }) => [styles.captureAreaSmall, pressed && styles.pressedBg]}>
+                      <Camera color={COLORS.text} size={24} />
+                      <Text style={styles.capturePrimaryText}>Add storefront photo</Text>
+                    </Pressable>
+                  )}
+                  <View style={styles.photoActions}>
+                    <PrimaryAction icon={<Camera size={16} color={palette.white} />} label="Camera" onPress={() => void requestCameraAndCapture()} />
+                    <SecondaryAction icon={<Images size={16} color={COLORS.text} />} label="Library" onPress={() => void requestLibraryAndPick()} />
+                  </View>
+                </View>
+              </View>
+            ) : null}
           </View>
         </ScrollView>
 
         <View style={[styles.saveBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <View style={styles.readinessRow}>
-            <ReadinessPill attention={showValidation && missingName} complete={!missingName} label="Shop" />
-            <ReadinessPill attention={showValidation && missingLocation} complete={!missingLocation} label="Location" />
-            <ReadinessPill attention={showValidation && missingOutcome} complete={!missingOutcome} label="Outcome" />
-          </View>
+          <Text style={styles.saveBarHint}>
+            {isReadyToSave ? "Everything required is complete." : `Finish ${remainingRequiredCount} required ${remainingRequiredCount === 1 ? "item" : "items"}.`}
+          </Text>
           <Pressable 
             disabled={isSaving} 
             onPress={() => { void playSelectionHaptic(); void handleSave(); }} 
@@ -749,13 +803,25 @@ export function CaptureScreen() {
               isSaving && styles.actionDisabled,
             ]}
           >
-            {isSaving ? <ActivityIndicator color={palette.white} /> : <Text style={styles.saveButtonText}>{isReadyToSave ? "Save Visit" : "Save Visit"}</Text>}
+            {isSaving ? (
+              <ActivityIndicator color={palette.white} />
+            ) : (
+              <Text style={styles.saveButtonText}>
+                {isReadyToSave ? "Save Visit" : `Finish ${remainingRequiredCount} required ${remainingRequiredCount === 1 ? "item" : "items"}`}
+              </Text>
+            )}
           </Pressable>
         </View>
 
         {flashState && (
-          <View style={[styles.toast, flashState.tone === "success" && styles.toastSuccess, flashState.tone === "warning" && styles.toastWarning, flashState.tone === "error" && styles.toastError, { bottom: insets.bottom + 112 }]}>
-            <Text style={[styles.toastText, flashState.tone === "warning" && { color: COLORS.bg }]}>{flashState.message}</Text>
+          <View style={[styles.toastShell, { bottom: insets.bottom + 112 }]}>
+            <View style={[styles.toastCard, flashToneMeta?.toneStyle]}>
+              <View style={[styles.toastIndicator, flashToneMeta?.indicatorStyle]} />
+              <View style={styles.toastCopy}>
+                <Text style={styles.toastTitle}>{flashToneMeta?.title}</Text>
+                <Text style={styles.toastText}>{flashState.message}</Text>
+              </View>
+            </View>
           </View>
         )}
 
@@ -964,50 +1030,92 @@ const styles = StyleSheet.create({
   actionRowTight: { flexDirection: "row", gap: spacing.xs },
   content: { gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.md },
 
-  quickStrip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  syncChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
-    backgroundColor: COLORS.card,
+  completionCard: {
+    gap: spacing.sm,
+    borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "#D9E0E8",
+    backgroundColor: COLORS.card,
+    padding: spacing.lg,
   },
-  syncChipText: {
-    fontSize: typography.overline,
+  completionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  completionTitle: {
+    fontSize: typography.label,
     fontWeight: "800",
     color: COLORS.text,
     textTransform: "uppercase",
-    letterSpacing: 0.8,
+    letterSpacing: 1.1,
   },
-  pendingChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
-    backgroundColor: COLORS.warningSoft,
-  },
-  pendingChipText: {
+  completionMeta: {
     fontSize: typography.overline,
     fontWeight: "800",
-    color: COLORS.warning,
+    color: COLORS.textMuted,
     textTransform: "uppercase",
-    letterSpacing: 0.8,
+    letterSpacing: 0.9,
+  },
+  progressTrack: {
+    width: "100%",
+    height: 10,
+    borderRadius: radii.pill,
+    backgroundColor: "#E9EDF2",
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: radii.pill,
+    backgroundColor: COLORS.accent,
+  },
+  readinessRow: {
+    flexDirection: "row",
+    gap: spacing.xs,
+  },
+  readinessPill: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
+    paddingVertical: 8,
+  },
+  readinessPillComplete: {
+    borderColor: "#B7E2C9",
+    backgroundColor: COLORS.successSoft,
+  },
+  readinessPillAttention: {
+    borderColor: "#F2B8B5",
+    backgroundColor: COLORS.dangerSoft,
+  },
+  readinessPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.textMuted,
+  },
+  readinessPillTextComplete: {
+    color: COLORS.success,
+  },
+  readinessPillTextAttention: {
+    color: COLORS.danger,
+  },
+  completionHint: {
+    fontSize: typography.label,
+    color: COLORS.textMuted,
+    lineHeight: 20,
+    fontWeight: "600",
   },
 
   priorityCard: {
-    gap: spacing.md,
+    gap: spacing.lg,
     borderRadius: radii.lg,
     backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: spacing.md,
+    borderColor: "#D9E0E8",
+    padding: spacing.lg,
     ...shadows.card,
   },
   priorityHeader: {
@@ -1109,13 +1217,13 @@ const styles = StyleSheet.create({
 
   fieldBlock: { gap: 6 },
   fieldHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
-  fieldLabel: { fontSize: typography.overline, fontWeight: "800", color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.9 },
+  fieldLabel: { fontSize: 12, fontWeight: "800", color: COLORS.text, textTransform: "uppercase", letterSpacing: 0.8 },
   inputHero: {
     minHeight: 58,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.inputBg,
+    borderColor: "#C9D2DD",
+    backgroundColor: COLORS.card,
     paddingHorizontal: spacing.md,
     fontSize: 24,
     fontWeight: "800",
@@ -1125,23 +1233,24 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: radii.sm,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.inputBg,
+    borderColor: "#C9D2DD",
+    backgroundColor: COLORS.card,
     paddingHorizontal: spacing.md,
     fontSize: typography.body,
     fontWeight: "600",
     color: COLORS.text,
   },
-  inputFocused: { borderColor: "#3B82F6" },
+  inputFocused: { borderColor: COLORS.accent, shadowColor: COLORS.accent, shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
   inputError: { borderColor: COLORS.danger },
+  inputDisabled: { backgroundColor: "#F2F4F7", color: COLORS.textMuted },
   inlineError: { fontSize: 12, fontWeight: "700", color: COLORS.danger },
 
   locationPanel: {
     gap: spacing.sm,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.inputBg,
+    borderColor: "#D9E0E8",
+    backgroundColor: COLORS.card,
     padding: spacing.md,
   },
   validationPanel: { borderColor: COLORS.danger },
@@ -1151,11 +1260,12 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   outcomeChip: {
-    minHeight: 42,
+    minHeight: 44,
     paddingHorizontal: spacing.md,
+    paddingVertical: 8,
     borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "#D0D7E2",
     backgroundColor: COLORS.card,
     alignItems: "center",
     justifyContent: "center",
@@ -1186,11 +1296,12 @@ const styles = StyleSheet.create({
 
   toggleRow: { flexDirection: "row", gap: 6 },
   toggleChip: {
+    minHeight: 40,
     borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "#D0D7E2",
     backgroundColor: COLORS.card,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     paddingVertical: 8,
   },
   toggleChipActive: {
@@ -1203,7 +1314,7 @@ const styles = StyleSheet.create({
   },
   toggleChipText: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     color: COLORS.textMuted,
   },
   toggleChipTextActive: {
@@ -1215,16 +1326,16 @@ const styles = StyleSheet.create({
 
   emptyLocationRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   emptyLocationText: { flex: 1, fontSize: typography.body, color: COLORS.textMuted, fontWeight: "600" },
-  locationFoundBlock: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, padding: spacing.sm, borderRadius: radii.sm },
+  locationFoundBlock: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.card, borderWidth: 1, borderColor: "#D0D7E2", padding: spacing.sm, borderRadius: radii.md },
   locationAreaName: { fontSize: typography.body, fontWeight: "800", color: COLORS.text },
   locationSecondary: { fontSize: typography.label, color: COLORS.textMuted, marginTop: 2 },
 
-  captureAreaSmall: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 72, borderRadius: radii.sm, borderWidth: 1, borderColor: COLORS.border, borderStyle: "dashed", backgroundColor: COLORS.inputBg },
+  captureAreaSmall: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 72, borderRadius: radii.md, borderWidth: 1, borderColor: "#D0D7E2", borderStyle: "dashed", backgroundColor: "#FBFCFE" },
   capturePrimaryText: { fontSize: typography.body, fontWeight: "800", color: COLORS.text },
   photoActions: { flexDirection: "row", gap: spacing.sm },
   thumbnailRow: { gap: spacing.xs, paddingRight: spacing.xs },
-  thumbnailAddTile: { width: 72, height: 72, borderRadius: radii.sm, borderWidth: 1, borderColor: COLORS.border, borderStyle: "dashed", alignItems: "center", justifyContent: "center", backgroundColor: COLORS.inputBg },
-  thumbnailFrame: { width: 72, height: 72, borderRadius: radii.sm, overflow: "hidden", backgroundColor: COLORS.border },
+  thumbnailAddTile: { width: 72, height: 72, borderRadius: radii.md, borderWidth: 1, borderColor: "#D0D7E2", borderStyle: "dashed", alignItems: "center", justifyContent: "center", backgroundColor: COLORS.card },
+  thumbnailFrame: { width: 72, height: 72, borderRadius: radii.md, overflow: "hidden", backgroundColor: COLORS.border },
   thumbnailImage: { width: "100%", height: "100%" },
   thumbnailRemove: { position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center" },
 
@@ -1238,49 +1349,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: "#D9E0E8",
     shadowColor: "#111827",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 6,
   },
-  readinessRow: {
-    flexDirection: "row",
-    gap: spacing.xs,
-  },
-  readinessPill: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.inputBg,
-    paddingVertical: 7,
-  },
-  readinessPillComplete: {
-    borderColor: "#B7E2C9",
-    backgroundColor: COLORS.successSoft,
-  },
-  readinessPillAttention: {
-    borderColor: "#F2B8B5",
-    backgroundColor: COLORS.dangerSoft,
-  },
-  readinessPillText: {
-    fontSize: 12,
-    fontWeight: "700",
+  saveBarHint: {
+    fontSize: typography.label,
     color: COLORS.textMuted,
-  },
-  readinessPillTextComplete: {
-    color: COLORS.success,
-  },
-  readinessPillTextAttention: {
-    color: COLORS.danger,
+    fontWeight: "600",
   },
   saveButton: { minHeight: 54, borderRadius: radii.md, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, backgroundColor: COLORS.accent },
   saveButtonPressed: { backgroundColor: COLORS.accentStrong },
   saveButtonText: { fontSize: typography.body, fontWeight: "800", color: palette.white },
+
+  moreDetailsToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: "#D0D7E2",
+    backgroundColor: COLORS.card,
+  },
+  moreDetailsTitle: {
+    fontSize: typography.label,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+  moreDetailsMeta: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  chevronOpen: {
+    transform: [{ rotate: "180deg" }],
+  },
+  extraDetailsCard: {
+    gap: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: "#D9E0E8",
+    backgroundColor: "#FBFCFE",
+    padding: spacing.md,
+  },
 
   primaryAction: { flex: 1, height: 48, borderRadius: radii.sm, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: COLORS.accent },
   primaryActionText: { fontSize: typography.label, fontWeight: "800", color: palette.white },
@@ -1291,11 +1408,71 @@ const styles = StyleSheet.create({
   pressedOpacity: { opacity: 0.7 },
   pressedBg: { backgroundColor: COLORS.border },
 
-  toast: { position: "absolute", left: spacing.lg, right: spacing.lg, borderRadius: radii.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  toastSuccess: { backgroundColor: COLORS.successSoft },
-  toastWarning: { backgroundColor: COLORS.warningSoft },
-  toastError: { backgroundColor: COLORS.dangerSoft },
-  toastText: { fontSize: typography.label, fontWeight: "700", color: COLORS.text, textAlign: "center" },
+  toastShell: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+  },
+  toastCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: COLORS.card,
+    shadowColor: "#18161D",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  toastToneSuccess: {
+    borderColor: "#9BD8B9",
+    backgroundColor: COLORS.successSoft,
+  },
+  toastToneWarning: {
+    borderColor: "#F3CC88",
+    backgroundColor: COLORS.warningSoft,
+  },
+  toastToneError: {
+    borderColor: "#E8A9A1",
+    backgroundColor: COLORS.dangerSoft,
+  },
+  toastIndicator: {
+    marginTop: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.textMuted,
+  },
+  toastIndicatorSuccess: {
+    backgroundColor: COLORS.success,
+  },
+  toastIndicatorWarning: {
+    backgroundColor: COLORS.warning,
+  },
+  toastIndicatorError: {
+    backgroundColor: COLORS.danger,
+  },
+  toastCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  toastTitle: {
+    fontSize: typography.overline,
+    fontWeight: "800",
+    color: COLORS.text,
+    textTransform: "uppercase",
+    letterSpacing: 0.9,
+  },
+  toastText: {
+    fontSize: typography.label,
+    fontWeight: "700",
+    color: COLORS.text,
+    lineHeight: 20,
+  },
 
   sheetMissionSection: {
     gap: spacing.sm,
