@@ -66,8 +66,6 @@ export const rules = {
     }
   },
 
-  },
-
 
   currencyConsistency: {
     id: 'currencyConsistency',
