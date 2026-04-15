@@ -512,11 +512,11 @@ body {
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
-.bd-list { display: flex; flex-direction: column; gap: 8px; list-style: none; }
+.bd-list { display: flex; flex-direction: column; gap: 10px; list-style: none; }
 .bd-list li {
   font-size: 13px;
   display: flex; justify-content: space-between; align-items: flex-start;
-  gap: 12px;
+  gap: 12px; line-height: 1.4;
 }
 .bd-label { color: var(--text-muted); flex: 1; }
 .bd-val { font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: var(--text); text-align: right; }
@@ -524,6 +524,29 @@ body {
 .bd-list-warning .bd-val, .bd-list .bd-val.val-warning { color: var(--danger); }
 .bd-list-review .bd-val, .bd-list .bd-val.val-review { color: var(--warning); }
 .bd-group.hidden { display: none; }
+.bd-group.bd-group-wide { grid-column: 1 / -1; }
+
+/* Proof Rows */
+ul.proof-list li {
+  display: block; 
+  font-size: 13px; color: var(--text-muted);
+}
+.proof-label {
+  display: inline-block;
+}
+.proof-divider {
+  margin: 0 6px; color: var(--text-muted); opacity: 0.5;
+}
+.proof-formula {
+  font-weight: 700; color: var(--text);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+}
+.proof-result {
+  color: var(--success); font-weight: 500; font-size: 13px;
+}
+.proof-result.issue { color: var(--danger); }
+.proof-result.warning { color: var(--warning); }
 
 /* ===== PDF Viewer ===== */
 .doc-preview {

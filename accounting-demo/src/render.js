@@ -205,16 +205,16 @@ export function renderAuditResults(findings, overallStatus, extractedFields) {
   dom.breakdown.issues.innerHTML = '';
   let issuesCount = 0;
 
-  const addMatch = (label, val) => {
+  const addMatch = (label, formula, result) => {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="bd-label">${label}</span><span class="bd-val">${val}</span>`;
+    li.innerHTML = `<span class="proof-label">${label}</span> <span class="proof-divider">—</span> <span class="proof-formula">${formula}</span><span class="proof-result">, ${result}</span>`;
     dom.breakdown.matched.appendChild(li);
   };
 
-  const addIssue = (label, val, status) => {
+  const addIssue = (label, formula, result, status) => {
     issuesCount++;
     const li = document.createElement('li');
-    li.innerHTML = `<span class="bd-label">${label}</span><span class="bd-val val-${status}">${val}</span>`;
+    li.innerHTML = `<span class="proof-label">${label}</span> <span class="proof-divider">—</span> <span class="proof-formula">${formula}</span><span class="proof-result ${status}">, ${result}</span>`;
     dom.breakdown.issues.appendChild(li);
   };
 
@@ -222,18 +222,20 @@ export function renderAuditResults(findings, overallStatus, extractedFields) {
   const allPresent = sub != null && vat != null && rate != null && total != null;
   
   if (allPresent) {
-    addMatch('Required Fields', 'All 6 found');
+    addMatch('Required fields', '6 of 6 fields found', 'all required fields present');
   } else {
-    addIssue('Required Fields', 'Missing data', 'review');
+    addIssue('Required fields', 'Missing critical fields', 'cannot verify complete document', 'issue');
   }
 
   if (sub != null && rate != null && vat != null) {
     const expectedVat = sub * rate;
     const vatDiff = Math.abs(Math.abs(expectedVat) - Math.abs(vat));
+    const formulaStr = `${sym} ${sub.toLocaleString(undefined,{minimumFractionDigits:2})} × ${(rate*100).toFixed(0)}% = ${sym} ${expectedVat.toFixed(2)}`;
+    
     if (vatDiff === 0) {
-      addMatch('VAT Calculation', `Matched (${sym} ${expectedVat.toFixed(2)})`);
+      addMatch('VAT check', formulaStr, 'matched invoice VAT');
     } else {
-      addIssue('VAT Calculation', `Expected ${sym} ${expectedVat.toFixed(2)}`, vatDiff <= 0.05 ? 'review' : 'fail');
+      addIssue('VAT check', formulaStr, `did NOT match invoice VAT (${sym} ${vat.toFixed(2)})`, vatDiff <= 0.05 ? 'warning' : 'issue');
     }
   }
 
@@ -241,17 +243,19 @@ export function renderAuditResults(findings, overallStatus, extractedFields) {
     const signedVat = sub < 0 ? -Math.abs(vat) : Math.abs(vat);
     const expectedTotal = sub + signedVat;
     const totalDiff = Math.abs(expectedTotal - total);
+    const formulaStr = `${sym} ${sub.toLocaleString(undefined,{minimumFractionDigits:2})} + ${sym} ${vat.toFixed(2)} = ${sym} ${expectedTotal.toFixed(2)}`;
+    
     if (totalDiff === 0) {
-      addMatch('Total Validation', `Matched (${sym} ${expectedTotal.toFixed(2)})`);
+      addMatch('Total check', formulaStr, 'matched invoice total');
     } else {
-      addIssue('Total Validation', `Expected ${sym} ${expectedTotal.toFixed(2)}`, totalDiff <= 0.05 ? 'review' : 'fail');
+      addIssue('Total check', formulaStr, `did NOT match invoice total (${sym} ${total.toLocaleString(undefined,{minimumFractionDigits:2})})`, totalDiff <= 0.05 ? 'warning' : 'issue');
     }
   }
 
   if (parseFloat(confidence) >= 90) {
-    addMatch('Confidence Gate', `${confidence}% overall`);
+    addMatch('Confidence check', `${confidence}% confidence`, 'above approval threshold');
   } else {
-    addIssue('Confidence Gate', `${confidence}% (vs 90% req)`, 'review');
+    addIssue('Confidence check', `${confidence}% confidence`, 'below 90% threshold', 'warning');
   }
 
   if (issuesCount > 0) {
