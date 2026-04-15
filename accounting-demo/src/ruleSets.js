@@ -9,7 +9,7 @@ export const ruleSets = {
   uaeVatStandard: {
     id: 'uaeVatStandard',
     label: 'UAE VAT Standard',
-    rules: ['requiredFields', 'vatCalculation', 'totalMatch', 'confidenceGate', 'currencyConsistency']
+    rules: ['requiredFields', 'vatCalculation', 'totalMatch', 'confidenceGate', 'currencyConsistency', 'dateValidity']
   },
   creditNote: {
     id: 'creditNote',
