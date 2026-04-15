@@ -39,6 +39,7 @@ import {
 import { api } from "../../convex/_generated/api";
 import { AppBottomSheet } from "../components/AppBottomSheet";
 import { AppTip } from "../components/AppTip";
+import { ScreenErrorBoundary } from "../components/ScreenErrorBoundary";
 import { ShopCard } from "../components/ShopCard";
 import { getVisitOutcomeLabel } from "../constants/visit-outcomes";
 import {
@@ -70,6 +71,17 @@ const categoryIcons = {
 } as const;
 
 export function ShopsListScreen() {
+  return (
+    <ScreenErrorBoundary
+      body="This mission view depends on Convex data. If the configured deployment is missing the latest functions, keep the app open and retry after the backend is updated."
+      title="Mission Feed Unavailable"
+    >
+      <ShopsListScreenContent />
+    </ScreenErrorBoundary>
+  );
+}
+
+function ShopsListScreenContent() {
   const isFocused = useIsFocused();
   const navigation = useNavigation<DashboardNavigation>();
   const moveShop = useMutation(api.shops.moveShop);

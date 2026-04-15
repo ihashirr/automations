@@ -1,12 +1,14 @@
+import Constants from "expo-constants";
 import * as Location from "expo-location";
 import { useIsFocused } from "@react-navigation/native";
 import { useQuery } from "convex/react";
-import { LocateFixed, Navigation, Phone, Target } from "lucide-react-native";
+import { LocateFixed, MapPinned, Navigation, Phone } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../convex/_generated/api";
+import { ScreenErrorBoundary } from "../components/ScreenErrorBoundary";
 import { defaultMission } from "../constants/missions";
 import { palette, radii, spacing, typography } from "../constants/theme";
 import { useCaptureQueue } from "../contexts/CaptureQueueContext";
@@ -25,6 +27,10 @@ type LeadPin = {
   status: "live" | "queued";
 };
 
+type ExpoExtra = {
+  googleMapsConfigured?: boolean;
+};
+
 const DEFAULT_REGION: Region = {
   latitude: 24.4539,
   longitude: 54.3773,
@@ -33,6 +39,18 @@ const DEFAULT_REGION: Region = {
 };
 
 export function MapScreen() {
+  return (
+    <ScreenErrorBoundary
+      body="The map needs Convex pins from the configured deployment. Retry after the backend has the latest functions."
+      title="Map Data Unavailable"
+      tone="dark"
+    >
+      <MapScreenContent />
+    </ScreenErrorBoundary>
+  );
+}
+
+function MapScreenContent() {
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { activeCategoryLabel, activeMissionLabel } = useMissionControl();
@@ -40,10 +58,12 @@ export function MapScreen() {
   const [currentLocation, setCurrentLocation] = useState<CapturedLocation | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LeadPin | null>(null);
+  const isMapConfigured =
+    (Constants.expoConfig?.extra as ExpoExtra | undefined)?.googleMapsConfigured === true;
 
   const feed = useQuery(
     api.shops.listMissionMapPins,
-    isFocused
+    isFocused && isMapConfigured
       ? {
           mission: activeMissionLabel,
           category: activeCategoryLabel ?? undefined,
@@ -147,6 +167,22 @@ export function MapScreen() {
     } finally {
       setIsLocating(false);
     }
+  }
+
+  if (!isMapConfigured) {
+    return (
+      <View style={styles.missingShell}>
+        <View style={styles.missingCard}>
+          <View style={styles.missingIconWrap}>
+            <MapPinned color={palette.white} size={22} />
+          </View>
+          <Text style={styles.missingTitle}>Google Maps key missing</Text>
+          <Text style={styles.missingBody}>
+            Set `GOOGLE_MAPS_API_KEY` or `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`, then rebuild Android.
+          </Text>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -275,6 +311,41 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#161719",
+  },
+  missingShell: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.xl,
+    backgroundColor: "#161719",
+  },
+  missingCard: {
+    width: "100%",
+    borderRadius: 28,
+    padding: spacing.xl,
+    gap: spacing.md,
+    backgroundColor: "#1C1D1F",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  missingIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E96B39",
+  },
+  missingTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: palette.white,
+  },
+  missingBody: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: palette.mutedInk,
+    fontWeight: "600",
   },
   topOverlay: {
     position: "absolute",

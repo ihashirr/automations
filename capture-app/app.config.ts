@@ -76,6 +76,7 @@ export default {
     },
     extra: {
       convexUrl: convexUrl ?? null,
+      googleMapsConfigured: Boolean(googleMapsApiKey),
       eas: {
         projectId: "55c89b48-19ea-4350-ae7f-6d52340200f7",
       },

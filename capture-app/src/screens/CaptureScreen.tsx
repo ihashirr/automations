@@ -1,7 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useIsFocused } from "@react-navigation/native";
-import { useQuery } from "convex/react";
+import { useConvex } from "convex/react";
 import {
   ReactNode,
   startTransition,
@@ -106,6 +106,7 @@ function isDraftPristine(draft: ShopDraft) {
 
 export function CaptureScreen() {
   const isFocused = useIsFocused();
+  const convex = useConvex();
   const {
     activeCategoryId,
     activeCategoryLabel,
@@ -130,6 +131,10 @@ export function CaptureScreen() {
   const [mapCoordinates, setMapCoordinates] = useState<Coordinates | null>(null);
   const [pickerMissionId, setPickerMissionId] = useState(activeMissionId);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [remoteDuplicates, setRemoteDuplicates] = useState<
+    Awaited<ReturnType<typeof convex.query<typeof api.shops.findPotentialDuplicates>>> | undefined
+  >(undefined);
+  const [remoteDuplicateCheckEnabled, setRemoteDuplicateCheckEnabled] = useState(true);
   const contactRef = useRef<TextInput>(null);
   const roleRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
@@ -144,16 +149,6 @@ export function CaptureScreen() {
     (sanitizePhoneInput(deferredDuplicatePhone).length >= 5 ||
       (normalizeText(deferredDuplicateName).length >= 3 &&
         normalizeText(deferredDuplicateNeighborhood).length >= 2));
-  const remoteDuplicates = useQuery(
-    api.shops.findPotentialDuplicates,
-    shouldCheckRemoteDuplicates
-      ? {
-          name: deferredDuplicateName,
-          neighborhood: deferredDuplicateNeighborhood,
-          phone: deferredDuplicatePhone,
-        }
-      : "skip",
-  );
   const localDuplicates = useMemo<DuplicateCandidate[]>(() => {
     const normalizedName = normalizeText(draft.name).toLowerCase();
     const normalizedNeighborhood = normalizeText(duplicateNeighborhood).toLowerCase();
@@ -218,6 +213,54 @@ export function CaptureScreen() {
     const timeout = setTimeout(() => setFlashState(null), 1800);
     return () => clearTimeout(timeout);
   }, [flashState]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!shouldCheckRemoteDuplicates || !remoteDuplicateCheckEnabled) {
+      setRemoteDuplicates(undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setRemoteDuplicates(undefined);
+
+    void convex
+      .query(api.shops.findPotentialDuplicates, {
+        name: deferredDuplicateName,
+        neighborhood: deferredDuplicateNeighborhood,
+        phone: deferredDuplicatePhone,
+      })
+      .then((results) => {
+        if (!cancelled) {
+          setRemoteDuplicates(results);
+        }
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setRemoteDuplicates([]);
+        setRemoteDuplicateCheckEnabled(false);
+        setFlashState({
+          message: "Live duplicate lookup is unavailable. Local queued duplicate checks are still active.",
+          tone: "warning",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    convex,
+    deferredDuplicateName,
+    deferredDuplicateNeighborhood,
+    deferredDuplicatePhone,
+    remoteDuplicateCheckEnabled,
+    shouldCheckRemoteDuplicates,
+  ]);
 
   useEffect(() => {
     setDraft((current) => (isDraftPristine(current) ? createEmptyDraft(activeMissionLabel, activeCategoryLabel) : current));

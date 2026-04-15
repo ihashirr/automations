@@ -4,6 +4,7 @@ import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "r
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { MapPin, MessageCircleMore, Phone } from "lucide-react-native";
 import { api } from "../../convex/_generated/api";
+import { ScreenErrorBoundary } from "../components/ScreenErrorBoundary";
 import { getVisitOutcomeLabel } from "../constants/visit-outcomes";
 import { palette, radii, spacing, typography } from "../constants/theme";
 import { buildCloudinaryImageUrl } from "../lib/cloudinary";
@@ -21,6 +22,18 @@ import { RootStackParamList } from "../navigation/types";
 type Props = NativeStackScreenProps<RootStackParamList, "ShopDetail">;
 
 export function ShopDetailScreen({ navigation, route }: Props) {
+  return (
+    <ScreenErrorBoundary
+      body="Lead details come from Convex. Retry after the configured deployment is serving the latest backend functions."
+      resetKeys={[route.params.shopId]}
+      title="Lead Detail Unavailable"
+    >
+      <ShopDetailScreenContent navigation={navigation} route={route} />
+    </ScreenErrorBoundary>
+  );
+}
+
+function ShopDetailScreenContent({ navigation, route }: Props) {
   const shop = useQuery(api.shops.getShop, {
     shopId: route.params.shopId,
   });
