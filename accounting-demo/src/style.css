@@ -568,14 +568,14 @@ body {
 /* Individual proof card */
 .proof-card {
   position: relative;
-  background: var(--bg-card);
+  background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 10px;
+  padding: 10px 16px;
+  margin-bottom: 8px;
   opacity: 0;
-  transform: translateY(8px);
-  animation: proofReveal 0.35s ease forwards;
+  transform: translateY(4px);
+  animation: proofReveal 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 .proof-card:last-child { margin-bottom: 0; }
 
@@ -583,8 +583,8 @@ body {
 .proof-card::before {
   content: '';
   position: absolute;
-  left: -24px; top: 18px;
-  width: 12px; height: 12px;
+  left: -24px; top: 16px;
+  width: 10px; height: 10px;
   border-radius: 50%;
   background: var(--bg-raised);
   border: 2px solid var(--border);
@@ -597,24 +597,26 @@ body {
 /* Card layout */
 .proof-card-top {
   display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .proof-card-label {
-  font-size: 12px; color: var(--text-muted); font-weight: 500;
+  font-size: 11px; color: var(--text-dim); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
 }
 .proof-chip {
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-  padding: 3px 10px; border-radius: 20px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 2px 8px; border-radius: 20px;
 }
 .proof-chip.chip-pass { background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--success); }
 .proof-chip.chip-fail { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 .proof-chip.chip-review { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--warning); }
 
 .proof-card-formula {
-  font-size: 14px; font-weight: 700; line-height: 1.5;
+  font-size: 15px; font-weight: 800; line-height: 1.4;
   color: var(--text);
   font-family: 'SF Mono','Fira Code',monospace;
-  animation: formulaHighlight 0.6s ease 0.35s both;
+  animation: formulaHighlight 0.8s ease 0.4s both;
+  letter-spacing: -0.01em;
 }
 
 /* Staggered reveal */
