@@ -1,4 +1,5 @@
 // src/render.js
+import { ruleSets } from './ruleSets.js';
 
 // DOM Elements
 export const dom = {
@@ -147,154 +148,66 @@ function createProofCard(label, formula, status) {
 /**
  * Renders the banner and proof trail cards
  */
-export function renderAuditResults(findings, overallStatus, extractedFields) {
+export function renderAuditResults(doc, overallStatus) {
+  const extractedFields = doc.extractedData?.fields;
+  const findings = doc.findings || [];
   const sym = extractedFields?.currencySymbol || '';
-
-  // Confidence calc
-  let confidence = (Math.random() * (99.2 - 95.5) + 95.5).toFixed(1);
-  if (overallStatus === 'review') confidence = (Math.random() * (89 - 78) + 78).toFixed(1);
-  if (overallStatus === 'fail') confidence = (Math.random() * (72 - 48) + 48).toFixed(1);
+  const ruleset = ruleSets[doc.appliedRuleSetId] || { label: 'Unknown' };
 
   // Counts
   let pCount = 0, fCount = 0, rCount = 0;
   findings.forEach(f => { if (f.status === 'pass') pCount++; if (f.status === 'fail') fCount++; if (f.status === 'review') rCount++; });
-  const totalChecks = findings.length;
 
   // ───── 1. Top Banner ─────
   dom.banner.container.className = `doc-banner status-${overallStatus}`;
   dom.banner.iconWrap.innerHTML = STATUS_ICONS[overallStatus] || '';
 
-  let resultText = 'Auto-Approved';
-  if (overallStatus === 'fail') resultText = 'Needs Review';
+  let resultText = 'Approved';
+  if (overallStatus === 'fail') resultText = 'Issue Detected';
   if (overallStatus === 'review') resultText = 'Needs Review';
   dom.banner.status.textContent = resultText;
 
   if (overallStatus === 'pass') {
-    dom.banner.reason.textContent = `Matched all checks. No anomalies.`;
+    dom.banner.reason.textContent = `Policy match: all checks passed via ${ruleset.label}.`;
   } else if (overallStatus === 'fail') {
-    dom.banner.reason.textContent = `${fCount} exception${fCount !== 1 ? 's' : ''} detected. Requires manual correction.`;
+    dom.banner.reason.textContent = `${fCount} policy exception${fCount !== 1 ? 's' : ''} detected. Requires manual correction.`;
   } else {
-    dom.banner.reason.textContent = `${rCount} anomal${rCount !== 1 ? 'ies' : 'y'} flagged. Accountant sign-off needed.`;
+    dom.banner.reason.textContent = `${rCount} flag${rCount !== 1 ? 's' : ''} requiring review under ${ruleset.label}.`;
   }
 
-  const sub = extractedFields?.subtotal;
-  const vat = extractedFields?.vatAmount;
   const total = extractedFields?.total;
   let summaryParts = [];
   if (total != null) summaryParts.push(`Total: ${sym} ${total.toLocaleString(undefined,{minimumFractionDigits:2})}`);
-  if (overallStatus === 'pass' && sub != null && vat != null && total != null) {
-    summaryParts.push(`VAT matched`);
-  } else if (overallStatus === 'fail') {
-    const failTitles = findings.filter(f => f.status === 'fail').map(f => {
-      if (f.title.includes('VAT')) return 'VAT mismatch';
-      if (f.title.includes('Total')) return 'Total mismatch';
-      return f.title;
-    });
-    summaryParts.push(`Issue: ${failTitles.join(', ')}`);
-  } else if (overallStatus === 'review') {
-    const reviewTitles = findings.filter(f => f.status === 'review').map(f => {
-      if (f.title.includes('Confidence') || f.title.includes('Low')) return 'Low confidence OCR';
-      if (f.title.includes('VAT')) return 'VAT rounding';
-      return f.title;
-    });
-    summaryParts.push(`Flagged: ${reviewTitles.join(', ')}`);
+  
+  // Dynamic summary from findings
+  if (overallStatus !== 'pass') {
+    const issues = findings.filter(f => f.status === 'fail' || f.status === 'review').map(f => f.label);
+    if (issues.length > 0) summaryParts.push(`Issues: ${Array.from(new Set(issues)).join(', ')}`);
+  } else {
+     summaryParts.push(`${ruleset.label} applied`);
   }
+  
   dom.banner.summary.innerHTML = summaryParts.join(' <span class="dot">•</span> ');
 
   if (overallStatus === 'pass') {
     dom.banner.btnMainActionText.textContent = 'Override';
     dom.banner.btnMainAction.className = 'btn btn-secondary btn-icon';
-  } else if (overallStatus === 'fail') {
-    dom.banner.btnMainActionText.textContent = 'Review & Fix';
-    dom.banner.btnMainAction.className = 'btn btn-primary btn-icon';
   } else {
-    dom.banner.btnMainActionText.textContent = 'Approve Flag';
+    dom.banner.btnMainActionText.textContent = 'Review & Fix';
     dom.banner.btnMainAction.className = 'btn btn-primary btn-icon';
   }
 
   // ───── 2. Proof Trail Title ─────
-  dom.proof.trailTitle.textContent = overallStatus === 'pass' ? 'Why this was approved' : 'Invoice check trail';
+  dom.proof.trailTitle.innerHTML = `Ruleset: <strong>${ruleset.label}</strong> <span style="font-weight:400; opacity:0.6; margin-left:8px;">(${findings.length} checks performed)</span>`;
 
   // ───── 3. Proof Cards ─────
   dom.proof.timeline.innerHTML = '';
-
-  const rate = extractedFields?.vatRate;
-  const allPresent = sub != null && vat != null && rate != null && total != null;
-  const invNum = extractedFields?.invoiceNumber;
-  const invDate = extractedFields?.invoiceDate;
-
-  // Card 1: Required Fields
-  dom.proof.timeline.appendChild(
-    createProofCard(
-      'Required fields',
-      allPresent ? '6 of 6 required fields found' : 'Missing critical invoice fields',
-      allPresent ? 'pass' : 'review'
-    )
-  );
-
-  // Card 2: VAT Calculation
-  if (sub != null && rate != null && vat != null) {
-    const expectedVat = sub * rate;
-    const vatDiff = Math.abs(Math.abs(expectedVat) - Math.abs(vat));
-    const ratePct = (rate * 100).toFixed(0);
-    const formula = `${sym} ${sub.toLocaleString(undefined,{minimumFractionDigits:2})} × ${ratePct}% = ${sym} ${expectedVat.toFixed(2)}`;
-    const status = vatDiff === 0 ? 'pass' : (vatDiff <= 0.05 ? 'review' : 'fail');
-    dom.proof.timeline.appendChild(createProofCard('VAT calculation', formula, status));
-  }
-
-  // Card 3: Total Calculation
-  if (sub != null && vat != null && total != null) {
-    const signedVat = sub < 0 ? -Math.abs(vat) : Math.abs(vat);
-    const expectedTotal = sub + signedVat;
-    const totalDiff = Math.abs(expectedTotal - total);
-    const formula = `${sym} ${sub.toLocaleString(undefined,{minimumFractionDigits:2})} + ${sym} ${vat.toFixed(2)} = ${sym} ${expectedTotal.toFixed(2)}`;
-    const status = totalDiff === 0 ? 'pass' : (totalDiff <= 0.05 ? 'review' : 'fail');
-    dom.proof.timeline.appendChild(createProofCard('Total calculation', formula, status));
-  }
-
-  // Card 4: Confidence
-  dom.proof.timeline.appendChild(
-    createProofCard(
-      'Confidence threshold',
-      `${confidence}% confidence, above 95% threshold`,
-      parseFloat(confidence) >= 90 ? 'pass' : 'review'
-    )
-  );
-
-  // Card 5: Duplicate Invoice Check
-  if (invNum) {
-    dom.proof.timeline.appendChild(
-      createProofCard(
-        'Duplicate check',
-        `Invoice #${invNum} — no prior match in system`,
-        'pass'
-      )
-    );
-  }
-
-  // Card 6: Date Validity
-  if (invDate) {
-    const daysDiff = Math.floor((Date.now() - new Date(invDate).getTime()) / (1000*60*60*24));
-    const dateOk = daysDiff >= 0 && daysDiff <= 365;
-    dom.proof.timeline.appendChild(
-      createProofCard(
-        'Date validity',
-        dateOk ? `Invoice dated ${invDate} — within acceptable range (${daysDiff}d ago)` : `Invoice dated ${invDate} — outside expected 365-day window`,
-        dateOk ? 'pass' : 'review'
-      )
-    );
-  }
-
-  // Card 7: Currency Consistency
-  if (sym) {
-    dom.proof.timeline.appendChild(
-      createProofCard(
-        'Currency consistency',
-        `All monetary values extracted in ${sym} — single currency confirmed`,
-        'pass'
-      )
-    );
-  }
+  
+  findings.forEach(finding => {
+      dom.proof.timeline.appendChild(
+          createProofCard(finding.label, finding.formula, finding.status)
+      );
+  });
 }
 
 export function showLoader(element, show) {
@@ -370,10 +283,13 @@ export function renderQueue(documents, selectedId, filter = 'all', searchTerm = 
       const total = doc.extractedData?.fields?.total;
       const amountText = total != null ? `${sym} ${total.toLocaleString(undefined,{minimumFractionDigits:2})}` : '';
 
+      const ruleset = ruleSets[doc.appliedRuleSetId] || { label: 'Unknown' };
+      const rulesetBadge = `<span class="doc-row-ruleset">${ruleset.label}</span>`;
+
       el.innerHTML = `
         <span class="doc-row-dot"></span>
         <div class="doc-row-body">
-          <div class="doc-row-name">${doc.fileName}</div>
+          <div class="doc-row-name">${doc.fileName}${rulesetBadge}</div>
           <div class="doc-row-meta">
             <span>${vendor}</span>
             ${amountText ? `<span class="doc-row-amount">${amountText}</span>` : ''}

@@ -1,7 +1,6 @@
 // src/main.js
 import './style.css';
 import { simulateExtraction, extractFromPdf } from './extraction.js';
-import { runAuditChecks, getOverallStatus } from './validation.js';
 import { dom, showStep, renderExtractedData, renderAuditResults, showLoader, updateKPIs, renderQueue } from './render.js';
 
 let documentsQueue = [];
@@ -10,7 +9,10 @@ let currentFilter = 'all';
 let searchTerm = '';
 let sortMode = 'time';
 let detailsPaneOpen = false;
+let activeRuleSet = 'uaeVatStandard';
 let showOnlyExceptions = false;
+import { runRuleSet } from './validation.js';
+import { ruleSets } from './ruleSets.js';
 
 // Simulated historical data
 let globalMetrics = {
@@ -19,6 +21,14 @@ let globalMetrics = {
   review: 115,
   timeSavedHours: 42.5
 };
+
+function updateActivePolicyInfo() {
+  const infoEl = document.getElementById('active-policy-info');
+  const ruleset = ruleSets[activeRuleSet];
+  if (infoEl && ruleset) {
+    infoEl.textContent = `Applying ${ruleset.rules.length} checks from "${ruleset.label}" to all uploads.`;
+  }
+}
 
 function bindEvents() {
   // Browse Files
@@ -65,6 +75,16 @@ function bindEvents() {
       // Reset workspace to empty state
       dom.layout.emptyState.classList.remove('hidden');
       dom.layout.docView.classList.add('hidden');
+    });
+  }
+
+  // Rule Set selector
+  const rulesetSelect = document.getElementById('ruleset-select');
+  if (rulesetSelect) {
+    rulesetSelect.value = activeRuleSet;
+    rulesetSelect.addEventListener('change', (e) => {
+      activeRuleSet = e.target.value;
+      updateActivePolicyInfo();
     });
   }
 
@@ -142,6 +162,8 @@ function bindEvents() {
   // Sample buttons
   dom.buttons.demoCorrect.addEventListener('click', () => handleMockUpload('correct'));
   dom.buttons.demoIncorrect.addEventListener('click', () => handleMockUpload('incorrect'));
+  
+  updateActivePolicyInfo();
 }
 
 function reRenderQueue() {
@@ -157,7 +179,8 @@ async function handleFiles(filesArray) {
     fileName: f.name,
     extractedData: null,
     findings: null,
-    overallStatus: 'loading'
+    overallStatus: 'loading',
+    appliedRuleSetId: activeRuleSet
   }));
 
   documentsQueue.push(...newDocs);
@@ -189,8 +212,12 @@ async function processDocument(id) {
       extracted = await extractFromPdf(doc.file);
     }
 
-    const findings = runAuditChecks(extracted.fields);
+    const findings = runRuleSet(extracted.fields, doc.appliedRuleSetId || activeRuleSet, doc.mockStatus || 'pass');
     const overall = getOverallStatus(findings);
+
+    doc.extractedData = extracted;
+    doc.findings = findings;
+    doc.overallStatus = overall;
 
     globalMetrics.processed++;
     if (overall === 'pass') globalMetrics.passed++;
@@ -249,7 +276,7 @@ function selectDocument(id) {
 
   } else {
     renderExtractedData(doc.extractedData);
-    renderAuditResults(doc.findings, doc.overallStatus, doc.extractedData?.fields);
+    renderAuditResults(doc, doc.overallStatus);
   }
 }
 
@@ -262,7 +289,9 @@ async function handleMockUpload(mockStatus) {
     fileName: mockStatus === 'correct' ? 'sample_valid_invoice.pdf' : 'sample_mismatched.pdf',
     extractedData: null,
     findings: null,
-    overallStatus: 'loading'
+    findings: null,
+    overallStatus: 'loading',
+    appliedRuleSetId: activeRuleSet
   };
   documentsQueue.push(newDoc);
   showStep('workspace');
