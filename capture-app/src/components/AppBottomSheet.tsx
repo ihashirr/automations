@@ -1,8 +1,7 @@
-import React, { ReactNode, useEffect, useRef, useCallback } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { ReactNode, useCallback } from "react";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
-import { BottomSheetModal, BottomSheetView, BottomSheetBackdrop } from "@gorhom/bottom-sheet";
 import { palette, radii, shadows, spacing, typography } from "../constants/theme";
 import { playSelectionHaptic } from "../lib/haptics";
 
@@ -22,81 +21,57 @@ export function AppBottomSheet({
   visible,
 }: AppBottomSheetProps) {
   const insets = useSafeAreaInsets();
-  const bottomSheetModalRef = useRef<BottomSheetModal>(null);
-
-  useEffect(() => {
-    if (visible) {
-      bottomSheetModalRef.current?.present();
-    } else {
-      bottomSheetModalRef.current?.dismiss();
-    }
-  }, [visible]);
-
-  const handleSheetChanges = useCallback((index: number) => {
-    if (index === -1) {
-      onClose();
-    }
-  }, [onClose]);
-
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        pressBehavior="close"
-      />
-    ),
-    []
-  );
 
   return (
-    <BottomSheetModal
-      ref={bottomSheetModalRef}
-      onChange={handleSheetChanges}
-      enableDynamicSizing={true}
-      backdropComponent={renderBackdrop}
-      keyboardBehavior={Platform.OS === "ios" ? "extend" : "interactive"}
-      keyboardBlurBehavior="restore"
-      backgroundStyle={styles.backgroundStyle}
-      handleIndicatorStyle={styles.indicatorStyle}
-    >
-      <BottomSheetView style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-        <View style={styles.header}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.title}>{title}</Text>
-            {description ? <Text style={styles.description}>{description}</Text> : null}
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+          <View style={styles.handle} />
+          <View style={styles.header}>
+            <View style={styles.headerCopy}>
+              <Text style={styles.title}>{title}</Text>
+              {description ? <Text style={styles.description}>{description}</Text> : null}
+            </View>
+            <Pressable
+              onPress={() => {
+                void playSelectionHaptic();
+                onClose();
+              }}
+              style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
+            >
+              <X color={palette.ink} size={18} />
+            </Pressable>
           </View>
-          <Pressable
-            onPress={() => {
-              void playSelectionHaptic();
-              onClose();
-            }}
-            style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
-          >
-            <X color={palette.ink} size={18} />
-          </Pressable>
+          {children}
         </View>
-        {children}
-      </BottomSheetView>
-    </BottomSheetModal>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backgroundStyle: {
-    backgroundColor: palette.card,
-    borderRadius: radii.lg,
-    ...shadows.card,
+  backdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(17, 24, 39, 0.35)",
   },
-  indicatorStyle: {
+  handle: {
+    alignSelf: "center",
+    width: 42,
+    height: 5,
+    borderRadius: 999,
     backgroundColor: palette.line,
-    width: 40,
+    marginBottom: spacing.md,
   },
   sheet: {
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
+    backgroundColor: palette.card,
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+    ...shadows.card,
   },
   header: {
     flexDirection: "row",
