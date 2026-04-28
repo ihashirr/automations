@@ -309,6 +309,7 @@ async function toShopSummary(ctx: QueryCtx, shop: Doc<"shops">) {
     phone: shop.phone,
     contactPerson: shop.contactPerson,
     role: shop.role ?? "",
+    nextStep: shop.nextStep ?? "",
     outcome: resolveOutcome(shop),
     previewImageUrl: await resolvePreviewImageUrl(ctx, shop),
     location,
@@ -544,6 +545,74 @@ export const moveShop = mutation({
       }),
       updatedAt: Date.now(),
     });
+  },
+});
+
+export const updateShopLead = mutation({
+  args: {
+    shopId: v.id("shops"),
+    contactPerson: v.string(),
+    name: v.string(),
+    nextStep: v.optional(v.string()),
+    phone: v.string(),
+    role: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const shop = await ctx.db.get(args.shopId);
+
+    if (!shop) {
+      throw new Error("Lead not found.");
+    }
+
+    const name = normalizeText(args.name);
+    const phone = normalizePhone(args.phone);
+    const contactPerson = normalizeText(args.contactPerson);
+    const role = normalizeText(args.role ?? "");
+    const nextStep = normalizeText(args.nextStep ?? "");
+    const location = resolveLocation(shop);
+    const neighborhood = resolveNeighborhood(shop, location);
+
+    if (!name) {
+      throw new Error("Lead name is required.");
+    }
+
+    await ctx.db.patch(args.shopId, {
+      contactPerson,
+      name,
+      nextStep,
+      normalizedName: normalizeIndexText(name),
+      phone,
+      role,
+      searchText: toSearchTextInput({
+        category: resolveCategory(shop),
+        mission: resolveMission(shop),
+        name,
+        neighborhood,
+        phone,
+        contactPerson,
+        role,
+        referredBy: shop.referredBy,
+        nextStep,
+        outcome: resolveOutcome(shop),
+        formattedAddress: buildLocationSearchText(location, shop.address),
+      }),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const deleteShopLead = mutation({
+  args: {
+    shopId: v.id("shops"),
+  },
+  handler: async (ctx, args) => {
+    const shop = await ctx.db.get(args.shopId);
+
+    if (!shop) {
+      return;
+    }
+
+    await ctx.db.delete(args.shopId);
   },
 });
 

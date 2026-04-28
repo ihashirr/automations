@@ -3,7 +3,7 @@ const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL?.trim() || undefined;
 export default {
   expo: {
     name: "Leadit",
-    slug: "leadit",
+    slug: "capture-app",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -19,6 +19,7 @@ export default {
     },
     android: {
       package: "com.ihash.captureapp",
+      softwareKeyboardLayoutMode: "resize",
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#1E1A1D",

@@ -21,10 +21,19 @@ type CaptureQueueContextValue = {
   pendingCaptures: PendingCapture[];
   pendingCount: number;
   queueReady: boolean;
+  deletePendingCapture: (localId: string) => Promise<void>;
   reclassifyPendingCapture: (args: {
     category: string;
     localId: string;
     mission: string;
+  }) => Promise<void>;
+  updatePendingCapture: (args: {
+    contactPerson: string;
+    localId: string;
+    name: string;
+    nextStep?: string;
+    phone: string;
+    role?: string;
   }) => Promise<void>;
   saveCapture: (draft: ShopDraft) => Promise<SaveCaptureResult>;
 };
@@ -51,6 +60,31 @@ function normalizeDraft(draft: ShopDraft): ShopDraft {
           formattedAddress: normalizeText(draft.location.formattedAddress),
         }
       : null,
+  };
+}
+
+function shouldContinueQueueAfterSyncError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+
+  return (
+    message.includes("EXPO_PUBLIC_CLOUDINARY_") ||
+    message.includes("Cloudinary configuration error") ||
+    message.includes("Cloudinary upload failed") ||
+    message.includes("Cloudinary network error")
+  );
+}
+
+function isLegacyAddressLabelValidatorError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return message.includes("extra field `addressLabel`") && message.includes("Path: .location");
+}
+
+function toLegacyLocation(location: NonNullable<ShopDraft["location"]>) {
+  return {
+    lat: location.lat,
+    lng: location.lng,
+    formattedAddress: normalizeText(location.addressLabel ?? "") || location.formattedAddress,
   };
 }
 
@@ -98,6 +132,41 @@ export function CaptureQueueProvider({ children }: { children: ReactNode }) {
     await replacePendingCaptures(nextQueue);
   }
 
+  async function updatePendingCapture(args: {
+    contactPerson: string;
+    localId: string;
+    name: string;
+    nextStep?: string;
+    phone: string;
+    role?: string;
+  }) {
+    const nextQueue = pendingCapturesRef.current.map((capture) =>
+      capture.localId === args.localId
+        ? {
+            ...capture,
+            contactPerson: normalizeText(args.contactPerson),
+            name: normalizeText(args.name),
+            nextStep: normalizeText(args.nextStep ?? ""),
+            phone: sanitizePhoneInput(args.phone),
+            role: normalizeText(args.role ?? ""),
+          }
+        : capture,
+    );
+
+    await replacePendingCaptures(nextQueue);
+  }
+
+  async function deletePendingCapture(localId: string) {
+    const target = pendingCapturesRef.current.find((capture) => capture.localId === localId);
+    const nextQueue = pendingCapturesRef.current.filter((capture) => capture.localId !== localId);
+
+    if (target) {
+      deletePendingCaptureImages(target.images);
+    }
+
+    await replacePendingCaptures(nextQueue);
+  }
+
   async function syncCapture(draft: ShopDraft) {
     if (!draft.location) {
       throw new Error("Pin the shop location before saving.");
@@ -109,7 +178,7 @@ export function CaptureQueueProvider({ children }: { children: ReactNode }) {
     const imageUrls =
       draft.images.length > 0 ? await uploadImages(draft.images) : [];
 
-    await createShop({
+    const createShopArgs = {
       category: draft.category,
       name: draft.name,
       mission: draft.mission,
@@ -122,7 +191,21 @@ export function CaptureQueueProvider({ children }: { children: ReactNode }) {
       outcome: draft.outcome,
       images: imageUrls,
       location: draft.location,
-    });
+    };
+
+    try {
+      await createShop(createShopArgs);
+    } catch (error) {
+      if (!draft.location.addressLabel || !isLegacyAddressLabelValidatorError(error)) {
+        throw error;
+      }
+
+      // Current deployed Convex validators may not accept addressLabel yet.
+      await createShop({
+        ...createShopArgs,
+        location: toLegacyLocation(draft.location),
+      });
+    }
   }
 
   flushQueueRef.current = async () => {
@@ -141,6 +224,7 @@ export function CaptureQueueProvider({ children }: { children: ReactNode }) {
 
     const queueSnapshot = [...pendingCapturesRef.current];
     const remainingCaptures: PendingCapture[] = [];
+    let syncIssue: string | null = null;
 
     for (let index = 0; index < queueSnapshot.length; index += 1) {
       const capture = queueSnapshot[index];
@@ -149,10 +233,18 @@ export function CaptureQueueProvider({ children }: { children: ReactNode }) {
         await syncCapture(capture);
         deletePendingCaptureImages(capture.images);
       } catch (error) {
-        setLastSyncIssue(humanizeSyncIssue(error));
-        remainingCaptures.push(...queueSnapshot.slice(index));
-        break;
+        syncIssue = syncIssue ?? humanizeSyncIssue(error);
+        remainingCaptures.push(capture);
+
+        if (!shouldContinueQueueAfterSyncError(error)) {
+          remainingCaptures.push(...queueSnapshot.slice(index + 1));
+          break;
+        }
       }
+    }
+
+    if (syncIssue) {
+      setLastSyncIssue(syncIssue);
     }
 
     await replacePendingCaptures(remainingCaptures);
@@ -248,7 +340,9 @@ export function CaptureQueueProvider({ children }: { children: ReactNode }) {
         pendingCaptures,
         pendingCount: pendingCaptures.length,
         queueReady,
+        deletePendingCapture,
         reclassifyPendingCapture,
+        updatePendingCapture,
         saveCapture,
       }}
     >

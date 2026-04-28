@@ -10,6 +10,8 @@ import {
   createBottomTabNavigator,
 } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, FolderOpen, Map, Plus } from "lucide-react-native";
 import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -56,6 +58,9 @@ const navigationTheme: NavigationTheme = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const MissionsStackStack = createNativeStackNavigator<MissionsStackParamList>();
 const Tabs = createBottomTabNavigator<HomeTabParamList>();
+const glassBlurMethod = Platform.OS === "android" ? "dimezisBlurView" : "none";
+const headerGlassColors = ["rgba(255, 252, 248, 0.90)", "rgba(255, 249, 242, 0.62)"] as const;
+const captureGradientColors = ["#D9663A", "#A94628"] as const;
 
 type NavigationStateSnapshot = {
   index: number;
@@ -76,6 +81,12 @@ function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
   const missionsRoute = state.routes.find((route) => route.name === "Missions");
   const captureRoute = state.routes.find((route) => route.name === "Capture");
   const mapRoute = state.routes.find((route) => route.name === "Map");
+  const missionsIndex = state.routes.findIndex((route) => route.key === missionsRoute?.key);
+  const captureIndex = state.routes.findIndex((route) => route.key === captureRoute?.key);
+  const mapIndex = state.routes.findIndex((route) => route.key === mapRoute?.key);
+  const missionsFocused = state.index === missionsIndex;
+  const captureFocused = state.index === captureIndex;
+  const mapFocused = state.index === mapIndex;
 
   if (!missionsRoute || !captureRoute || !mapRoute) {
     return null;
@@ -85,13 +96,12 @@ function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
     <View style={[styles.tabBarShell, { paddingBottom: Math.max(insets.bottom, 12) }]}>
       <View style={styles.tabBarSurface}>
         <CommandTabButton
-          focused={state.index === state.routes.findIndex((route) => route.key === missionsRoute.key)}
-          icon={<FolderOpen color={state.index === state.routes.findIndex((route) => route.key === missionsRoute.key) ? palette.ink : palette.mutedInk} size={20} />}
+          focused={missionsFocused}
+          icon={<FolderOpen color={missionsFocused ? palette.accentStrong : palette.mutedInk} size={20} />}
           label="Missions"
           onPress={() => {
             setActiveCategoryId(null);
-            const isFocused = state.index === state.routes.findIndex((route) => route.key === missionsRoute.key);
-            if (isFocused) {
+            if (missionsFocused) {
               navigation.navigate("Missions", { screen: "MissionHub" });
             } else {
               handleTabPress({ navigation, route: missionsRoute, state });
@@ -100,13 +110,13 @@ function CommandTabBar({ descriptors, navigation, state }: BottomTabBarProps) {
         />
         <View style={styles.captureSlot}>
           <CaptureTabButton
-            focused={state.index === state.routes.findIndex((route) => route.key === captureRoute.key)}
+            focused={captureFocused}
             onPress={() => handleTabPress({ navigation, route: captureRoute, state })}
           />
         </View>
         <CommandTabButton
-          focused={state.index === state.routes.findIndex((route) => route.key === mapRoute.key)}
-          icon={<Map color={state.index === state.routes.findIndex((route) => route.key === mapRoute.key) ? palette.ink : palette.mutedInk} size={20} />}
+          focused={mapFocused}
+          icon={<Map color={mapFocused ? palette.accentStrong : palette.mutedInk} size={20} />}
           label="Map"
           onPress={() => handleTabPress({ navigation, route: mapRoute, state })}
         />
@@ -129,90 +139,86 @@ function AppHeader({
   navigationRef: NavigationRefLike;
 }) {
   const insets = useSafeAreaInsets();
-  const { activeCategoryLabel, activeMissionLabel } = useMissionControl();
-  const { isOnline, pendingCount } = useCaptureQueue();
+  const { isOnline, pendingCount, queueReady } = useCaptureQueue();
+  const { activeCategoryLabel } = useMissionControl();
   const navigationState = useNavigationState((state) => state as unknown as NavigationStateSnapshot);
 
   const rootRoute = navigationState.routes[navigationState.index];
   const activeTabRoute = rootRoute.name === "Home" ? rootRoute.state?.routes[rootRoute.state.index] : null;
   const activeTabName = activeTabRoute?.name ?? rootRoute.name;
 
-  let eyebrow = "FIELD SUITE";
-  let title = "Field Command";
-  let subtitle = activeMissionLabel;
+  let title = "Mission";
 
   if (rootRoute.name === "ShopDetail") {
-    eyebrow = "LEAD DETAIL";
     title = "Review Lead";
-    subtitle = pendingCount > 0 ? `${pendingCount} queued capture${pendingCount === 1 ? "" : "s"}` : "Lead inspection";
   } else if (activeTabName === "MissionHub") {
-    eyebrow = "FIELD HUB";
     title = "Operational Modules";
-    subtitle = "Choose a module and keep the day moving.";
   } else if (activeTabName === "MissionsList") {
-    eyebrow = activeMissionLabel.toUpperCase();
     title = activeCategoryLabel ?? "Mission Feed";
-    subtitle = activeCategoryLabel ? `${activeMissionLabel} / ${activeCategoryLabel}` : "All folders";
   } else if (activeTabName === "MissionDetail") {
-    eyebrow = activeMissionLabel.toUpperCase();
     title = activeCategoryLabel ?? "Folder Detail";
-    subtitle = `${isOnline ? "Connected" : "Offline"} • ${pendingCount} queued`;
   } else if (activeTabName === "Capture") {
-    eyebrow = "CAPTURE";
     title = "New Lead";
-    subtitle = activeMissionLabel;
   } else if (activeTabName === "Map") {
-    eyebrow = "MAP";
     title = "Field Map";
-    subtitle = activeMissionLabel;
   }
 
   const canGoBack = navigationReady && navigationRef.isReady() ? navigationRef.canGoBack() : false;
+  const showBackButton = canGoBack && title !== "New Lead";
+  const queueValueStyle = pendingCount === 0 ? styles.headerQueueValueClear : styles.headerQueueValuePending;
+  const networkDotStyle = !queueReady
+    ? styles.headerNetworkDotConnecting
+    : isOnline
+      ? styles.headerNetworkDotOnline
+      : styles.headerNetworkDotOffline;
 
   return (
     <View style={[styles.appHeader, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.appHeaderTopRow}>
-        {canGoBack ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            onPress={() => {
-              if (navigationReady && navigationRef.isReady() && navigationRef.canGoBack()) {
-                navigationRef.goBack();
-              }
-            }}
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          >
-            <ArrowLeft color={palette.ink} size={18} />
-          </Pressable>
-        ) : (
-          <View style={styles.backButtonSpacer} />
-        )}
-
-        <View style={styles.statusStack}>
-          <View style={[styles.statusPill, isOnline ? styles.statusPillConnected : styles.statusPillOffline]}>
-            <View style={[styles.statusDot, { backgroundColor: isOnline ? palette.success : palette.warning }]} />
-            <Text style={styles.statusPillText}>{isOnline ? "Connected" : "Offline"}</Text>
+      <BlurView
+        experimentalBlurMethod={glassBlurMethod}
+        intensity={48}
+        style={styles.appHeaderGlass}
+        tint="light"
+      >
+        <LinearGradient colors={headerGlassColors} pointerEvents="none" style={styles.headerGlassTone} />
+        <View style={styles.appHeaderTopRow}>
+          <View style={styles.headerEdge}>
+            {showBackButton ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                onPress={() => {
+                  if (navigationReady && navigationRef.isReady() && navigationRef.canGoBack()) {
+                    navigationRef.goBack();
+                  }
+                }}
+                style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+              >
+                <ArrowLeft color={palette.ink} size={18} />
+              </Pressable>
+            ) : null}
+            <View style={styles.headerQueuePill}>
+              <Text style={[styles.headerQueueValue, queueValueStyle]}>{pendingCount}</Text>
+              <Text style={styles.headerQueueLabel}>Q</Text>
+            </View>
           </View>
-          <View style={styles.secondaryPill}>
-            <Text style={styles.secondaryPillText}>{pendingCount > 0 ? `${pendingCount} queued` : "Queue clear"}</Text>
+
+          <View style={styles.headerBrand}>
+            <View style={styles.brandMarkPlate}>
+              <Image source={require("../../assets/leadit-mark.png")} style={styles.brandMark} />
+            </View>
+            <Text numberOfLines={1} style={styles.headerPageTitle}>
+              {title}
+            </Text>
+          </View>
+
+          <View style={[styles.headerEdge, styles.headerEdgeRight]}>
+            <View style={styles.headerNetworkIndicator}>
+              <View style={[styles.headerNetworkDot, networkDotStyle]} />
+            </View>
           </View>
         </View>
-      </View>
-
-      <View style={styles.appHeaderCopy}>
-        <View style={styles.brandRow}>
-          <Image source={require("../../assets/leadit-mark.png")} style={styles.brandMark} />
-          <Text style={styles.brandName}>Leadit</Text>
-        </View>
-        <Text style={styles.appHeaderEyebrow}>{eyebrow}</Text>
-        <Text numberOfLines={1} style={styles.appHeaderTitle}>
-          {title}
-        </Text>
-        <Text numberOfLines={1} style={styles.appHeaderSubtitle}>
-          {subtitle}
-        </Text>
-      </View>
+      </BlurView>
     </View>
   );
 }
@@ -258,12 +264,13 @@ function CommandTabButton({
       }}
       style={({ pressed }) => [
         styles.sideTabButton,
-        focused && styles.sideTabButtonActive,
+        focused && styles.sideTabButtonFocused,
         pressed && styles.sideTabButtonPressed,
       ]}
     >
       <View style={[styles.sideTabIconWrap, focused && styles.sideTabIconWrapActive]}>{icon}</View>
       <Text style={[styles.sideTabLabel, focused && styles.sideTabLabelActive]}>{label}</Text>
+      {focused ? <View style={styles.sideTabIndicator} /> : null}
     </Pressable>
   );
 }
@@ -277,6 +284,7 @@ function CaptureTabButton({
 }) {
   return (
     <View style={styles.captureTabWrap}>
+      {focused ? <View pointerEvents="none" style={styles.captureTabHalo} /> : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Open capture"
@@ -291,7 +299,14 @@ function CaptureTabButton({
           pressed && styles.captureTabButtonPressed,
         ]}
       >
-        <Plus color={palette.white} size={24} />
+        <LinearGradient
+          colors={captureGradientColors}
+          end={{ x: 1, y: 1 }}
+          start={{ x: 0, y: 0 }}
+          style={styles.captureTabGradient}
+        >
+          <Plus color={palette.white} size={24} />
+        </LinearGradient>
       </Pressable>
     </View>
   );
@@ -304,7 +319,11 @@ function MissionsStack() {
     <MissionsStackStack.Navigator
       initialRouteName="MissionHub"
       screenOptions={{
+        freezeOnBlur: true,
         headerShown: false,
+        contentStyle: {
+          backgroundColor: palette.background,
+        },
       }}
     >
       <MissionsStackStack.Screen
@@ -314,6 +333,10 @@ function MissionsStack() {
       <MissionsStackStack.Screen
         component={ShopsListScreen}
         name="MissionsList"
+        options={{
+          animation: "fade_from_bottom",
+          animationDuration: 240,
+        }}
       />
       <MissionsStackStack.Screen
         component={ShopsListScreen}
@@ -335,9 +358,11 @@ function HomeTabs({
       <AppHeader navigationReady={navigationReady} navigationRef={navigationRef} />
       <View style={styles.appBody}>
         <Tabs.Navigator
+          detachInactiveScreens
           initialRouteName="Capture"
           tabBar={(props) => <CommandTabBar {...props} />}
           screenOptions={{
+            freezeOnBlur: true,
             headerShown: false,
             tabBarHideOnKeyboard: true,
             sceneStyle: {
@@ -363,119 +388,142 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   appHeader: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(24, 22, 29, 0.08)",
-    backgroundColor: "rgba(244, 238, 230, 0.96)",
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    backgroundColor: "rgba(244, 238, 230, 0.84)",
+  },
+  appHeaderGlass: {
+    minHeight: 52,
+    justifyContent: "center",
+    overflow: "hidden",
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(24, 22, 29, 0.09)",
+    backgroundColor: "rgba(255, 252, 248, 0.72)",
+    paddingHorizontal: 7,
+    ...(Platform.OS === "web"
+      ? {
+          boxShadow: "0px 14px 34px rgba(24, 22, 29, 0.11)",
+        }
+      : {
+          shadowColor: "#18161D",
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.1,
+          shadowRadius: 22,
+          elevation: 10,
+        }),
+  },
+  headerGlassTone: {
+    ...StyleSheet.absoluteFillObject,
   },
   appHeaderTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    gap: spacing.sm,
+    minHeight: 46,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: palette.card,
+    backgroundColor: "rgba(255, 252, 248, 0.76)",
     borderWidth: 1,
-    borderColor: palette.line,
+    borderColor: "rgba(24, 22, 29, 0.1)",
   },
   backButtonPressed: {
-    opacity: 0.7,
+    opacity: 0.72,
   },
-  backButtonSpacer: {
-    width: 40,
-    height: 40,
-  },
-  statusStack: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  statusPill: {
+  headerEdge: {
+    width: 108,
+    minHeight: 38,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 7,
+  },
+  headerEdgeRight: {
+    justifyContent: "flex-end",
+  },
+  headerBrand: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+  },
+  brandMarkPlate: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(24, 22, 29, 0.08)",
+  },
+  brandMark: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+  },
+  headerPageTitle: {
+    maxWidth: "100%",
+    fontSize: 16,
+    fontWeight: "900",
+    color: palette.ink,
+  },
+  headerQueuePill: {
+    minHeight: 24,
+    paddingHorizontal: 8,
     borderRadius: radii.pill,
-    backgroundColor: palette.syncBadge,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255, 252, 248, 0.82)",
+    borderWidth: 1,
+    borderColor: "rgba(24, 22, 29, 0.08)",
   },
-  statusPillConnected: {
-    backgroundColor: palette.successSoft,
+  headerQueueValue: {
+    fontSize: 10,
+    fontWeight: "900",
   },
-  statusPillOffline: {
-    backgroundColor: palette.warningSoft,
+  headerQueueValueClear: {
+    color: palette.success,
   },
-  statusDot: {
+  headerQueueValuePending: {
+    color: palette.mutedInk,
+  },
+  headerQueueLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: palette.mutedInk,
+  },
+  headerNetworkIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 252, 248, 0.82)",
+    borderWidth: 1,
+    borderColor: "rgba(24, 22, 29, 0.08)",
+  },
+  headerNetworkDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
   },
-  statusPillText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: palette.ink,
-    letterSpacing: 0.2,
-    textTransform: "uppercase",
+  headerNetworkDotConnecting: {
+    backgroundColor: "#A6A6A6",
   },
-  secondaryPill: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 7,
-    borderRadius: radii.pill,
-    backgroundColor: palette.card,
-    borderWidth: 1,
-    borderColor: palette.line,
+  headerNetworkDotOnline: {
+    backgroundColor: palette.success,
   },
-  secondaryPillText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: palette.mutedInk,
-    letterSpacing: 0.2,
-    textTransform: "uppercase",
-  },
-  appHeaderCopy: {
-    gap: 2,
-  },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  brandMark: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-  },
-  brandName: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: palette.ink,
-    letterSpacing: 0.2,
-  },
-  appHeaderEyebrow: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: palette.accentStrong,
-    letterSpacing: 1.8,
-    textTransform: "uppercase",
-  },
-  appHeaderTitle: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: palette.ink,
-  },
-  appHeaderSubtitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: palette.mutedInk,
+  headerNetworkDotOffline: {
+    backgroundColor: palette.danger,
   },
   tabBarShell: {
     backgroundColor: "transparent",
@@ -483,15 +531,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   tabBarSurface: {
-    minHeight: 82,
+    minHeight: 84,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    position: "relative",
+    overflow: "visible",
     borderRadius: 32,
     borderWidth: 1,
     borderColor: "rgba(24, 22, 29, 0.08)",
-    backgroundColor: "rgba(255, 249, 242, 0.96)",
-    paddingHorizontal: spacing.sm,
+    backgroundColor: "rgba(255, 249, 242, 0.98)",
+    paddingHorizontal: 10,
     ...(Platform.OS === "web"
       ? {
           boxShadow: "0px 22px 40px rgba(24, 22, 29, 0.14)",
@@ -501,46 +551,51 @@ const styles = StyleSheet.create({
           shadowOffset: { width: 0, height: 14 },
           shadowOpacity: 0.14,
           shadowRadius: 28,
-          elevation: 18,
+          elevation: 10,
         }),
   },
   sideTabButton: {
     flex: 1,
-    minHeight: 58,
+    minHeight: 60,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    borderRadius: radii.md,
+    position: "relative",
+    gap: 5,
+    borderRadius: 24,
+    backgroundColor: "transparent",
   },
-  sideTabButtonActive: {
-    backgroundColor: "rgba(217, 102, 58, 0.08)",
+  sideTabButtonFocused: {
+    backgroundColor: "rgba(217, 102, 58, 0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(217, 102, 58, 0.14)",
   },
   sideTabIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255, 252, 248, 0.42)",
   },
   sideTabIconWrapActive: {
-    backgroundColor: palette.accentSoft,
+    backgroundColor: "rgba(255, 252, 248, 0.78)",
   },
   sideTabButtonPressed: {
-    opacity: 0.8,
+    opacity: 0.76,
   },
   sideTabLabel: {
     fontSize: 11,
     fontWeight: "800",
     color: palette.mutedInk,
-    letterSpacing: 0.3,
   },
   sideTabLabelActive: {
     color: palette.ink,
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: palette.ink,
+  sideTabIndicator: {
+    width: 20,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: palette.accent,
   },
   captureSlot: {
     flex: 1,
@@ -548,36 +603,53 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   captureTabWrap: {
+    position: "relative",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -28,
+    marginTop: -30,
+  },
+  captureTabHalo: {
+    position: "absolute",
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    backgroundColor: "rgba(217, 102, 58, 0.18)",
   },
   captureTabButton: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: palette.accent,
+    width: 70,
+    height: 70,
+    overflow: "hidden",
+    borderRadius: 35,
+    backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 6,
-    borderColor: palette.background,
+    borderColor: "rgba(244, 238, 230, 0.98)",
     ...(Platform.OS === "web"
       ? {
-          boxShadow: "0px 18px 28px rgba(24, 22, 29, 0.22)",
+          boxShadow: "0px 20px 34px rgba(24, 22, 29, 0.26)",
         }
       : {
           shadowColor: "#18161D",
-          shadowOffset: { width: 0, height: 12 },
-          shadowOpacity: 0.22,
-          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 14 },
+          shadowOpacity: 0.24,
+          shadowRadius: 22,
           elevation: 12,
         }),
   },
+  captureTabGradient: {
+    flex: 1,
+    alignSelf: "stretch",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 29,
+  },
   captureTabButtonActive: {
-    backgroundColor: palette.accentStrong,
+    borderColor: "rgba(255, 249, 242, 1)",
   },
   captureTabButtonPressed: {
-    backgroundColor: palette.accentStrong,
+    opacity: 0.82,
+    transform: [{ scale: 0.97 }],
   },
 });
 

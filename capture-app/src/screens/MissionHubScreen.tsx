@@ -1,40 +1,165 @@
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { LayoutDashboard, Users, Zap, ArrowRight, Target, Clock } from "lucide-react-native";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { LayoutDashboard, Zap, ArrowRight, Target, Clock, Trash2 } from "lucide-react-native";
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Animated, Easing, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { missionCatalog, MissionDefinition } from "../constants/missions";
+import { MissionDefinition } from "../constants/missions";
 import { palette, radii, spacing, typography } from "../constants/theme";
 import { useMissionControl } from "../contexts/MissionControlContext";
 import { playSelectionHaptic } from "../lib/haptics";
 import { MissionsStackParamList } from "../navigation/types";
 
 type NavigationProp = NativeStackNavigationProp<MissionsStackParamList, "MissionsList">;
+type MissionModuleCardProps = {
+  deletingMissionId: string | null;
+  index: number;
+  item: MissionDefinition;
+  onDeleteMission: (mission: MissionDefinition) => void;
+  onOpenMission: (missionId: string) => void;
+};
 
-export function MissionHubScreen() {
-  const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NavigationProp>();
-  const { setActiveMissionId, setActiveCategoryId } = useMissionControl();
+function useEntranceMotion(delay: number, distance = 18, duration = 300) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(distance)).current;
 
-  const renderMission = ({ item }: { item: MissionDefinition }) => {
-    return (
+  useEffect(() => {
+    opacity.setValue(0);
+    translateY.setValue(distance);
+
+    const animation = Animated.parallel([
+      Animated.timing(opacity, {
+        duration,
+        easing: Easing.out(Easing.cubic),
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        duration: duration + 40,
+        easing: Easing.out(Easing.cubic),
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    const timeoutId = setTimeout(() => {
+      animation.start();
+    }, delay);
+
+    return () => {
+      clearTimeout(timeoutId);
+      animation.stop();
+    };
+  }, [delay, distance, duration, opacity, translateY]);
+
+  return { opacity, translateY };
+}
+
+function usePressScale() {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const animateTo = useCallback(
+    (toValue: number) => {
+      Animated.spring(scale, {
+        bounciness: toValue < 1 ? 0 : 6,
+        speed: 28,
+        toValue,
+        useNativeDriver: true,
+      }).start();
+    },
+    [scale],
+  );
+
+  const handlePressIn = useCallback(() => {
+    animateTo(0.985);
+  }, [animateTo]);
+
+  const handlePressOut = useCallback(() => {
+    animateTo(1);
+  }, [animateTo]);
+
+  return { handlePressIn, handlePressOut, scale };
+}
+
+const MissionHubHeader = memo(function MissionHubHeader({ missionCount }: { missionCount: number }) {
+  const { opacity, translateY } = useEntranceMotion(0, 24, 340);
+
+  return (
+    <Animated.View
+      style={[
+        styles.heroPanel,
+        {
+          opacity,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      <View style={styles.heroGlow} />
+      <View style={styles.heroGlowSecondary} />
+      <Text style={styles.heroEyebrow}>Mission SUITE</Text>
+      <Text style={styles.heroTitle}>Choose a module and keep the day moving.</Text>
+      <Text style={styles.heroBody}>
+        Capture fresh leads, keep folders clean, and route the team from one calmer command surface.
+      </Text>
+
+      <View style={styles.hubSummary}>
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryValue}>{missionCount}</Text>
+          <Text style={styles.summaryLabel}>Active Missions</Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
+});
+
+const MissionModuleCard = memo(function MissionModuleCard({
+  deletingMissionId,
+  index,
+  item,
+  onDeleteMission,
+  onOpenMission,
+}: MissionModuleCardProps) {
+  const { opacity, translateY } = useEntranceMotion(120 + index * 70, 22, 300);
+  const { handlePressIn, handlePressOut, scale } = usePressScale();
+  const handlePress = useCallback(() => {
+    onOpenMission(item.id);
+  }, [item.id, onOpenMission]);
+
+  return (
+    <Animated.View
+      style={{
+        opacity,
+        transform: [{ translateY }, { scale }],
+      }}
+    >
       <Pressable
-        onPress={() => {
-          void playSelectionHaptic();
-          setActiveMissionId(item.id);
-          setActiveCategoryId(null);
-          navigation.navigate("MissionsList");
-        }}
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         style={({ pressed }) => [
           styles.missionCard,
-          pressed && styles.missionCardPressed
+          pressed && styles.missionCardPressed,
         ]}
       >
         <View style={styles.cardEyebrowRow}>
           <Text style={styles.cardEyebrow}>Operational Module</Text>
-          <View style={styles.cardPulse}>
-            <Text style={styles.cardPulseText}>Open</Text>
-          </View>
+          <Pressable
+            accessibilityLabel={`Delete ${item.label} mission profile`}
+            accessibilityRole="button"
+            disabled={deletingMissionId !== null}
+            hitSlop={8}
+            onPress={(event) => {
+              event.stopPropagation();
+              onDeleteMission(item);
+            }}
+            style={({ pressed }) => [
+              styles.missionDeleteButton,
+              pressed && styles.missionDeleteButtonPressed,
+              deletingMissionId === item.id && styles.missionDeleteButtonDisabled,
+            ]}
+          >
+            <Trash2 color={palette.danger} size={18} />
+          </Pressable>
         </View>
 
         <View style={styles.cardHeader}>
@@ -49,56 +174,121 @@ export function MissionHubScreen() {
         </View>
 
         <View style={styles.cardStats}>
-           <View style={styles.statItem}>
-             <Target color={palette.mutedInk} size={14} />
-             <Text style={styles.statText}>Lead flow</Text>
-           </View>
-           <View style={styles.statItem}>
-             <Clock color={palette.mutedInk} size={14} />
-             <Text style={styles.statText}>Field log</Text>
-           </View>
+          <View style={styles.statItem}>
+            <Target color={palette.mutedInk} size={14} />
+            <Text style={styles.statText}>Lead flow</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Clock color={palette.mutedInk} size={14} />
+            <Text style={styles.statText}>Field log</Text>
+          </View>
         </View>
 
         <View style={styles.resumeButton}>
           <Text style={styles.resumeButtonText}>Enter Module</Text>
-          <Zap color={palette.white} size={14} fill={palette.white} />
+          <Zap color={palette.white} fill={palette.white} size={14} />
         </View>
       </Pressable>
-    );
-  };
+    </Animated.View>
+  );
+});
+
+export function MissionHubScreen() {
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NavigationProp>();
+  const { deleteMissionProfile, getMissionProfiles, setActiveMissionId, setActiveCategoryId } = useMissionControl();
+  const [deletingMissionId, setDeletingMissionId] = useState<string | null>(null);
+  const missionProfiles = getMissionProfiles();
+
+  const handleOpenMission = useCallback(
+    (missionId: string) => {
+      void playSelectionHaptic();
+      startTransition(() => {
+        setActiveMissionId(missionId);
+        setActiveCategoryId(null);
+      });
+      navigation.navigate("MissionsList");
+    },
+    [navigation, setActiveCategoryId, setActiveMissionId],
+  );
+
+  const handleDeleteMission = useCallback(
+    (mission: MissionDefinition) => {
+      if (deletingMissionId) {
+        return;
+      }
+
+      Alert.alert(
+        "Delete mission profile?",
+        `${mission.label} will be removed from Mission Hub and mission pickers. Saved leads stay in Convex.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => {
+              setDeletingMissionId(mission.id);
+              void deleteMissionProfile({
+                label: mission.label,
+                missionId: mission.id,
+              })
+                .catch((error) => {
+                  Alert.alert(
+                    "Mission was not deleted",
+                    error instanceof Error ? error.message : "Try again.",
+                  );
+                })
+                .finally(() => {
+                  setDeletingMissionId(null);
+                });
+            },
+          },
+        ],
+      );
+    },
+    [deleteMissionProfile, deletingMissionId],
+  );
+
+  const renderMission = useCallback(
+    ({ index, item }: { index: number; item: MissionDefinition }) => (
+      <MissionModuleCard
+        deletingMissionId={deletingMissionId}
+        index={index}
+        item={item}
+        onDeleteMission={handleDeleteMission}
+        onOpenMission={handleOpenMission}
+      />
+    ),
+    [deletingMissionId, handleDeleteMission, handleOpenMission],
+  );
+
+  const listHeader = useMemo(
+    () => <MissionHubHeader missionCount={missionProfiles.length} />,
+    [missionProfiles.length],
+  );
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={missionCatalog}
+        data={missionProfiles}
+        initialNumToRender={3}
         keyExtractor={(item) => item.id}
-        renderItem={renderMission}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: insets.bottom + 100 }
-        ]}
-        ListHeaderComponent={
-          <View style={styles.heroPanel}>
-            <View style={styles.heroGlow} />
-            <Text style={styles.heroEyebrow}>FIELD SUITE</Text>
-            <Text style={styles.heroTitle}>Choose a module and keep the day moving.</Text>
-            <Text style={styles.heroBody}>
-              Capture fresh leads, keep folders clean, and route the team from one calmer command surface.
-            </Text>
-
-            <View style={styles.hubSummary}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>{missionCatalog.length}</Text>
-                <Text style={styles.summaryLabel}>Active Missions</Text>
-              </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>24/7</Text>
-                <Text style={styles.summaryLabel}>Queue Control</Text>
-              </View>
-            </View>
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No mission profiles</Text>
+            <Text style={styles.emptyBody}>Deleted mission profiles are hidden from this workspace.</Text>
           </View>
         }
+        maxToRenderPerBatch={4}
+        removeClippedSubviews
+        renderItem={renderMission}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
+        windowSize={5}
       />
     </View>
   );
@@ -130,6 +320,15 @@ const styles = StyleSheet.create({
     top: -24,
     right: -32,
     backgroundColor: "rgba(240, 181, 143, 0.18)",
+  },
+  heroGlowSecondary: {
+    position: "absolute",
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    bottom: -28,
+    left: -12,
+    backgroundColor: "rgba(240, 181, 143, 0.1)",
   },
   heroEyebrow: {
     fontSize: 11,
@@ -205,6 +404,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
+  missionDeleteButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.dangerSoft,
+  },
+  missionDeleteButtonPressed: {
+    opacity: 0.72,
+  },
+  missionDeleteButtonDisabled: {
+    opacity: 0.45,
+  },
   missionCard: {
     backgroundColor: palette.card,
     borderRadius: radii.lg,
@@ -220,7 +433,6 @@ const styles = StyleSheet.create({
   },
   missionCardPressed: {
     backgroundColor: "#FFF5EE",
-    transform: [{ scale: 0.98 }],
   },
   cardHeader: {
     flexDirection: "row",
@@ -277,5 +489,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: palette.white,
+  },
+  emptyState: {
+    minHeight: 180,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: palette.line,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.card,
+    padding: spacing.xl,
+    gap: spacing.xs,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: palette.ink,
+  },
+  emptyBody: {
+    fontSize: typography.label,
+    lineHeight: 20,
+    textAlign: "center",
+    color: palette.mutedInk,
   },
 });

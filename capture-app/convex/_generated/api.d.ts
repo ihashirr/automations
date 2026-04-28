@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as missionFolders from "../missionFolders.js";
+import type * as missionProfiles from "../missionProfiles.js";
 import type * as shops from "../shops.js";
 
 import type {
@@ -17,6 +19,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  missionFolders: typeof missionFolders;
+  missionProfiles: typeof missionProfiles;
   shops: typeof shops;
 }>;
 

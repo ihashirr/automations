@@ -46,6 +46,7 @@ export type ShopSummary = {
   phone: string;
   contactPerson: string;
   role?: string;
+  nextStep?: string;
   outcome: VisitOutcomeValue;
   previewImageUrl: string | null;
   location: CapturedLocation | null;

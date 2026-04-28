@@ -17,24 +17,43 @@ import {
   Search,
   ShoppingBasket,
   Sparkles,
+  Star,
   Store,
   Target,
+  Trash2,
   Wifi,
   WifiOff,
 } from "lucide-react-native";
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  ComponentType,
+  ReactNode,
+  memo,
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Animated,
   BackHandler,
-  FlatList,
+  Easing,
+  InteractionManager,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
+  StyleProp,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
+  ViewStyle,
 } from "react-native";
 import { api } from "../../convex/_generated/api";
 import { AppBottomSheet } from "../components/AppBottomSheet";
@@ -44,7 +63,7 @@ import { ShopCard } from "../components/ShopCard";
 import { getVisitOutcomeLabel } from "../constants/visit-outcomes";
 import {
   getMissionDefinition,
-  missionCatalog,
+  MissionDefinition,
 } from "../constants/missions";
 import { palette, radii, spacing, typography } from "../constants/theme";
 import { useCaptureQueue } from "../contexts/CaptureQueueContext";
@@ -63,6 +82,15 @@ type DashboardNavigation = CompositeNavigationProp<
 >;
 type LeadTarget = { kind: "pending"; capture: PendingCapture } | { kind: "remote"; shop: ShopSummary };
 type DashboardRow = { distanceMeters: number | null; row: LeadTarget };
+type MissionCategory = { id: string; label: string };
+type MissionIcon = ComponentType<{ color: string; size: number }>;
+type LeadEditDraft = {
+  contactPerson: string;
+  name: string;
+  nextStep: string;
+  phone: string;
+  role: string;
+};
 
 const categoryIcons = {
   cafes: Coffee,
@@ -70,6 +98,252 @@ const categoryIcons = {
   "perfume-shops": Sparkles,
   unsorted: FolderOpen,
 } as const;
+
+function useEntranceMotion(delay: number, distance = 16, duration = 260) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(distance)).current;
+
+  useEffect(() => {
+    opacity.setValue(0);
+    translateY.setValue(distance);
+
+    const animation = Animated.parallel([
+      Animated.timing(opacity, {
+        duration,
+        easing: Easing.out(Easing.cubic),
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        duration: duration + 30,
+        easing: Easing.out(Easing.cubic),
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    const timeoutId = setTimeout(() => {
+      animation.start();
+    }, delay);
+
+    return () => {
+      clearTimeout(timeoutId);
+      animation.stop();
+    };
+  }, [delay, distance, duration, opacity, translateY]);
+
+  return { opacity, translateY };
+}
+
+function usePressScale() {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const animateTo = useCallback(
+    (toValue: number) => {
+      Animated.spring(scale, {
+        bounciness: toValue < 1 ? 0 : 6,
+        speed: 28,
+        toValue,
+        useNativeDriver: true,
+      }).start();
+    },
+    [scale],
+  );
+
+  const handlePressIn = useCallback(() => {
+    animateTo(0.986);
+  }, [animateTo]);
+
+  const handlePressOut = useCallback(() => {
+    animateTo(1);
+  }, [animateTo]);
+
+  return { handlePressIn, handlePressOut, scale };
+}
+
+const RevealBlock = memo(function RevealBlock({
+  children,
+  delay,
+  style,
+}: {
+  children: ReactNode;
+  delay: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { opacity, translateY } = useEntranceMotion(delay, 18, 280);
+
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          opacity,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+});
+
+const RecentActivityCard = memo(function RecentActivityCard({
+  index,
+  onPress,
+  row,
+}: {
+  index: number;
+  onPress: (row: LeadTarget) => void;
+  row: LeadTarget;
+}) {
+  const { opacity, translateY } = useEntranceMotion(70 + index * 45, 14, 220);
+  const { handlePressIn, handlePressOut, scale } = usePressScale();
+  const handleCardPress = useCallback(() => {
+    onPress(row);
+  }, [onPress, row]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.recentCardWrap,
+        {
+          opacity,
+          transform: [{ translateY }, { scale }],
+        },
+      ]}
+    >
+      <Pressable
+        onPress={handleCardPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={({ pressed }) => [styles.recentCard, pressed && styles.recentCardPressed]}
+      >
+        <View style={styles.recentIconBox}>
+          <Sparkles color={palette.accent} size={16} />
+        </View>
+        <Text numberOfLines={1} style={styles.recentName}>{getRowName(row)}</Text>
+        <Text style={styles.recentMeta}>{getRowNeighborhood(row) || "Unknown"}</Text>
+      </Pressable>
+    </Animated.View>
+  );
+});
+
+const MissionFolderCard = memo(function MissionFolderCard({
+  canDelete,
+  category,
+  count,
+  icon: Icon,
+  index,
+  isPinned,
+  onCreateLead,
+  onDelete,
+  onPress,
+  onTogglePin,
+  width,
+}: {
+  canDelete: boolean;
+  category: MissionCategory;
+  count: number;
+  icon: MissionIcon;
+  index: number;
+  isPinned: boolean;
+  onCreateLead: (categoryId: string) => void;
+  onDelete: (category: MissionCategory, count: number) => void;
+  onPress: (categoryId: string) => void;
+  onTogglePin: (categoryId: string) => void;
+  width: "48%" | "100%";
+}) {
+  const { opacity, translateY } = useEntranceMotion(110 + index * 50, 18, 240);
+  const { handlePressIn, handlePressOut, scale } = usePressScale();
+  const handleCardPress = useCallback(() => {
+    onPress(category.id);
+  }, [category.id, onPress]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.folderCardWrap,
+        { width },
+        {
+          opacity,
+          transform: [{ translateY }, { scale }],
+        },
+      ]}
+    >
+      <Pressable
+        accessibilityLabel={`${category.label}, ${count} lead${count === 1 ? "" : "s"}`}
+        onPress={handleCardPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={({ pressed }) => [styles.folderCard, pressed && styles.folderCardPressed]}
+      >
+        <Pressable
+          accessibilityLabel={`${isPinned ? "Unpin" : "Pin"} ${category.label}`}
+          accessibilityRole="button"
+          hitSlop={10}
+          onPress={(event) => {
+            event.stopPropagation();
+            onTogglePin(category.id);
+          }}
+          style={({ pressed }) => [
+            styles.folderPinButton,
+            isPinned && styles.folderPinButtonActive,
+            pressed && styles.folderIconButtonPressed,
+          ]}
+        >
+          <Star
+            color={isPinned ? palette.accentStrong : palette.mutedInk}
+            fill={isPinned ? palette.accentStrong : "transparent"}
+            size={16}
+          />
+        </Pressable>
+        <View style={styles.folderIcon}>
+          <Icon color={palette.accent} size={20} />
+        </View>
+        <View style={styles.folderInfo}>
+          <Text
+            accessibilityLabel={category.label}
+            ellipsizeMode="tail"
+            numberOfLines={1}
+            style={styles.folderName}
+          >
+            {category.label}
+          </Text>
+          <Text style={[styles.folderCount, count === 0 && styles.folderCountEmpty]}>
+            {count === 0 ? "No leads yet" : `${count} lead${count === 1 ? "" : "s"}`}
+          </Text>
+        </View>
+        {count === 0 ? (
+          <Pressable
+            accessibilityLabel={`Create first lead in ${category.label}`}
+            accessibilityRole="button"
+            onPress={(event) => {
+              event.stopPropagation();
+              onCreateLead(category.id);
+            }}
+            style={({ pressed }) => [styles.folderCreateButton, pressed && styles.folderCreateButtonPressed]}
+          >
+            <Text style={styles.folderCreateText}>Create first lead</Text>
+          </Pressable>
+        ) : null}
+        {canDelete ? (
+          <Pressable
+            accessibilityLabel={`Delete ${category.label} folder`}
+            accessibilityRole="button"
+            hitSlop={10}
+            onPress={(event) => {
+              event.stopPropagation();
+              onDelete(category, count);
+            }}
+            style={({ pressed }) => [styles.folderDeleteButton, pressed && styles.folderIconButtonPressed]}
+          >
+            <Trash2 color={palette.danger} size={17} />
+          </Pressable>
+        ) : null}
+      </Pressable>
+    </Animated.View>
+  );
+});
 
 export function ShopsListScreen() {
   return (
@@ -86,23 +360,28 @@ function ShopsListScreenContent() {
   const isFocused = useIsFocused();
   const navigation = useNavigation<DashboardNavigation>();
   const moveShop = useMutation(api.shops.moveShop);
+  const updateShopLead = useMutation(api.shops.updateShopLead);
+  const deleteShopLead = useMutation(api.shops.deleteShopLead);
+  const { width: screenWidth } = useWindowDimensions();
   const {
     activeCategoryId,
     activeCategoryLabel,
     activeMissionId,
     activeMissionLabel,
+    deleteMissionCategory,
     getMissionCategories,
+    getMissionProfiles,
     setActiveCategoryId,
-    setActiveMissionId,
   } = useMissionControl();
   const {
     flushQueue,
     isFlushing,
-    isOnline,
     pendingCaptures,
     pendingCount,
     queueReady,
+    deletePendingCapture,
     reclassifyPendingCapture,
+    updatePendingCapture,
   } = useCaptureQueue();
   const [searchText, setSearchText] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("latest");
@@ -112,15 +391,61 @@ function ShopsListScreenContent() {
   const [isLocating, setIsLocating] = useState(false);
   const [locationIssue, setLocationIssue] = useState<string | null>(null);
   const [selectedLead, setSelectedLead] = useState<LeadTarget | null>(null);
+  const [editingLead, setEditingLead] = useState<LeadTarget | null>(null);
+  const [editDraft, setEditDraft] = useState<LeadEditDraft>({
+    contactPerson: "",
+    name: "",
+    nextStep: "",
+    phone: "",
+    role: "",
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [pinnedCategoryIds, setPinnedCategoryIds] = useState<string[]>([]);
+  const [screenReady, setScreenReady] = useState(false);
   const normalizedSearch = normalizeSearchText(useDeferredValue(searchText));
-  const mission = getMissionDefinition(activeMissionId);
+  const normalizedActiveMissionLabel = useMemo(
+    () => normalizeSearchText(activeMissionLabel),
+    [activeMissionLabel],
+  );
   const missionCategories = useMemo(
     () => getMissionCategories(activeMissionId),
     [activeMissionId, getMissionCategories],
   );
+  const missionProfiles = getMissionProfiles();
+  const folderCardWidth: "48%" | "100%" = screenWidth < 380 ? "100%" : "48%";
+  const orderedMissionCategories = useMemo(() => {
+    return [...missionCategories].sort((left, right) => {
+      const leftPinned = pinnedCategoryIds.includes(left.id);
+      const rightPinned = pinnedCategoryIds.includes(right.id);
+
+      if (leftPinned !== rightPinned) {
+        return leftPinned ? -1 : 1;
+      }
+
+      return 0;
+    });
+  }, [missionCategories, pinnedCategoryIds]);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setScreenReady(false);
+      return;
+    }
+
+    setScreenReady(false);
+    const task = InteractionManager.runAfterInteractions(() => {
+      setScreenReady(true);
+    });
+
+    return () => {
+      task.cancel();
+    };
+  }, [isFocused]);
+
   const feed = useQuery(
     api.shops.listMissionFeed,
-    isFocused ? { mission: activeMissionLabel, limit: 200 } : "skip",
+    isFocused && screenReady ? { mission: activeMissionLabel, limit: 200 } : "skip",
   );
 
   useEffect(() => {
@@ -204,16 +529,19 @@ function ShopsListScreenContent() {
 
   const missionRows = useMemo(() => {
     const pendingRows = pendingCaptures
-      .filter((capture) => normalizeSearchText(capture.mission) === normalizeSearchText(activeMissionLabel))
+      .filter((capture) => normalizeSearchText(capture.mission) === normalizedActiveMissionLabel)
       .map<LeadTarget>((capture) => ({ kind: "pending", capture }));
     const remoteRows = (feed ?? []).map<LeadTarget>((shop: ShopSummary) => ({ kind: "remote", shop }));
     return [...pendingRows, ...remoteRows];
-  }, [activeMissionLabel, feed, pendingCaptures]);
+  }, [feed, normalizedActiveMissionLabel, pendingCaptures]);
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const category of missionCategories) counts.set(category.label, 0);
-    for (const row of missionRows) counts.set(getRowCategory(row), (counts.get(getRowCategory(row)) ?? 0) + 1);
+    for (const row of missionRows) {
+      const categoryLabel = getRowCategory(row);
+      counts.set(categoryLabel, (counts.get(categoryLabel) ?? 0) + 1);
+    }
     return counts;
   }, [missionCategories, missionRows]);
 
@@ -306,7 +634,51 @@ function ShopsListScreenContent() {
     };
   }, [filteredRows]);
 
-  const isLoading = !queueReady || (isFocused && feed === undefined);
+  const emptyLeadState = useMemo(() => {
+    if (focusFilter === "hot") {
+      return {
+        title: "No hot leads right now.",
+        body: "View all leads or check back after more visits.",
+        canClearFocus: true,
+      };
+    }
+
+    if (focusFilter === "follow_up") {
+      return {
+        title: "No follow-up leads right now.",
+        body: "View all leads or add more follow-up outcomes.",
+        canClearFocus: true,
+      };
+    }
+
+    if (focusFilter === "unknown") {
+      return {
+        title: "No leads need review.",
+        body: "View all leads or keep capturing new visits.",
+        canClearFocus: true,
+      };
+    }
+
+    if (searchText.trim() || activeNeighborhood) {
+      return {
+        title: "No matching leads.",
+        body: "Clear search or area filters to see more results.",
+        canClearFocus: false,
+      };
+    }
+
+    return {
+      title: "No leads yet.",
+      body: "Create the first lead in this folder.",
+      canClearFocus: false,
+    };
+  }, [activeNeighborhood, focusFilter, searchText]);
+
+  const isLoading =
+    !queueReady ||
+    (isFocused && activeCategoryId !== null && (!screenReady || feed === undefined));
+
+  const visibleRecentRows = useMemo(() => missionRows.slice(0, 5), [missionRows]);
 
   async function handleMoveLead(missionLabel: string, categoryLabel: string) {
     if (!selectedLead) return;
@@ -323,9 +695,97 @@ function ShopsListScreenContent() {
     void playMissionAccomplishedHaptic();
   }
 
+  function openEditLead(row: LeadTarget) {
+    setEditDraft({
+      contactPerson: getRowContact(row),
+      name: getRowName(row),
+      nextStep: getRowNextStep(row),
+      phone: getRowPhone(row),
+      role: getRowRole(row),
+    });
+    setEditingLead(row);
+  }
+
+  async function saveLeadEdit() {
+    if (!editingLead || isSavingEdit) {
+      return;
+    }
+
+    const trimmedName = editDraft.name.trim();
+
+    if (!trimmedName) {
+      Alert.alert("Name is required", "Add a lead or shop name before saving.");
+      return;
+    }
+
+    setIsSavingEdit(true);
+
+    try {
+      if (editingLead.kind === "pending") {
+        await updatePendingCapture({
+          contactPerson: editDraft.contactPerson,
+          localId: editingLead.capture.localId,
+          name: trimmedName,
+          nextStep: editDraft.nextStep,
+          phone: editDraft.phone,
+          role: editDraft.role,
+        });
+      } else {
+        await updateShopLead({
+          contactPerson: editDraft.contactPerson,
+          name: trimmedName,
+          nextStep: editDraft.nextStep,
+          phone: editDraft.phone,
+          role: editDraft.role,
+          shopId: editingLead.shop._id,
+        });
+      }
+
+      setEditingLead(null);
+    } catch (error) {
+      Alert.alert("Lead was not updated", error instanceof Error ? error.message : "Try again.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
+
+  function confirmDeleteLead(row: LeadTarget) {
+    Alert.alert(
+      "Delete lead?",
+      `${getRowName(row)} will be removed from this folder.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void deleteLead(row);
+          },
+        },
+      ],
+    );
+  }
+
+  async function deleteLead(row: LeadTarget) {
+    try {
+      if (row.kind === "pending") {
+        await deletePendingCapture(row.capture.localId);
+      } else {
+        await deleteShopLead({ shopId: row.shop._id });
+      }
+
+      setSelectedLead((current) => (current === row ? null : current));
+      setEditingLead((current) => (current === row ? null : current));
+    } catch (error) {
+      Alert.alert("Lead was not deleted", error instanceof Error ? error.message : "Try again.");
+    }
+  }
+
   function returnToFolderGrid() {
     void playSelectionHaptic();
-    setActiveCategoryId(null);
+    startTransition(() => {
+      setActiveCategoryId(null);
+    });
     navigation.navigate("MissionsList");
   }
 
@@ -334,6 +794,94 @@ function ShopsListScreenContent() {
     // Use the root navigator to switch tabs if necessary
     (navigation as any).getParent()?.navigate("Capture");
   }
+
+  const openRecentActivity = useCallback(
+    (row: LeadTarget) => {
+      void playSelectionHaptic();
+      if (row.kind === "remote") {
+        navigation.navigate("ShopDetail", { shopId: row.shop._id });
+      }
+    },
+    [navigation],
+  );
+
+  const openCategory = useCallback(
+    (categoryId: string) => {
+      void playSelectionHaptic();
+      startTransition(() => {
+        setActiveCategoryId(categoryId);
+      });
+      navigation.navigate("MissionDetail", {
+        missionId: activeMissionId,
+        categoryId,
+      });
+    },
+    [activeMissionId, navigation, setActiveCategoryId],
+  );
+
+  const createLeadInCategory = useCallback(
+    (categoryId: string) => {
+      void playSelectionHaptic();
+      startTransition(() => {
+        setActiveCategoryId(categoryId);
+      });
+      (navigation as any).getParent()?.navigate("Capture");
+    },
+    [navigation, setActiveCategoryId],
+  );
+
+  const togglePinnedCategory = useCallback((categoryId: string) => {
+    void playSelectionHaptic();
+    setPinnedCategoryIds((current) => {
+      if (current.includes(categoryId)) {
+        return current.filter((id) => id !== categoryId);
+      }
+
+      return [categoryId, ...current].slice(0, 3);
+    });
+  }, []);
+
+  const deleteCategory = useCallback(
+    async (category: MissionCategory, count: number) => {
+      const normalizedLabel = category.label.trim().toLowerCase();
+
+      if (normalizedLabel === "unsorted" || deletingCategoryId) {
+        return;
+      }
+
+      Alert.alert(
+        "Delete folder?",
+        count > 0
+          ? `${category.label} has ${count} lead${count === 1 ? "" : "s"}. They will move to Unsorted.`
+          : `${category.label} will be removed from this mission.`,
+        [
+          { style: "cancel", text: "Cancel" },
+          {
+            style: "destructive",
+            text: "Delete",
+            onPress: () => {
+              setDeletingCategoryId(category.id);
+              void deleteMissionCategory({
+                categoryId: category.id,
+                label: category.label,
+                missionId: activeMissionId,
+              })
+                .catch((error) => {
+                  Alert.alert(
+                    "Folder was not deleted",
+                    error instanceof Error ? error.message : "Try again after the connection is ready.",
+                  );
+                })
+                .finally(() => {
+                  setDeletingCategoryId(null);
+                });
+            },
+          },
+        ],
+      );
+    },
+    [activeMissionId, deleteMissionCategory, deletingCategoryId],
+  );
 
   function renderLead({ item }: { item: DashboardRow }) {
     const row = item.row;
@@ -344,6 +892,8 @@ function ShopsListScreenContent() {
       location: getRowLocation(row),
       name: getRowName(row),
       neighborhood: getRowNeighborhood(row),
+      onDelete: () => confirmDeleteLead(row),
+      onEdit: () => openEditLead(row),
       onLongPress: () => setSelectedLead(row),
       outcome: getRowOutcome(row),
       phone: getRowPhone(row),
@@ -382,6 +932,8 @@ function ShopsListScreenContent() {
           activeCategoryLabel ? styles.contentCompact : null,
           { paddingTop: spacing.md, paddingBottom: spacing.xxl + 120 },
         ]}
+        keyboardDismissMode="on-drag"
+        refreshControl={<RefreshControl onRefresh={() => void flushQueue()} refreshing={isFlushing} />}
         showsVerticalScrollIndicator={false}
       >
 
@@ -391,83 +943,66 @@ function ShopsListScreenContent() {
           </View>
         ) : !activeCategoryId ? (
           <View style={styles.dashboard}>
-            {/* Layer 1: Mission Stats Ribbon */}
-            <View style={styles.statsRibbon}>
+            <RevealBlock delay={0} style={styles.statsRibbon}>
               <View style={styles.ribbonCard}>
                 <Text style={styles.ribbonValue}>{feed?.length || 0}</Text>
                 <Text style={styles.ribbonLabel}>ACTIVE LEADS</Text>
               </View>
-              <View style={[styles.ribbonCard, { backgroundColor: "#161719" }]}>
-                <Text style={[styles.ribbonValue, { color: palette.white }]}>{pendingCount}</Text>
-                <Text style={[styles.ribbonLabel, { color: "#B4AC9F" }]}>PENDING</Text>
+              <View style={[styles.ribbonCard, styles.ribbonCardDark]}>
+                <Text style={[styles.ribbonValue, styles.ribbonValueDark]}>{pendingCount}</Text>
+                <Text style={[styles.ribbonLabel, styles.ribbonLabelDark]}>PENDING</Text>
               </View>
-            </View>
+            </RevealBlock>
 
-            {/* Layer 2: Recent Activity Carousel */}
-            <View style={styles.section}>
+            <RevealBlock delay={70} style={styles.section}>
               <Text style={styles.sectionHeaderLabel}>RECENT ACTIVITY</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.recentCarousel}
               >
-                {missionRows.slice(0, 5).map((row, idx) => (
-                  <Pressable 
-                    key={idx} 
-                    onPress={() => {
-                        void playSelectionHaptic();
-                        if (row.kind === "remote") {
-                            navigation.navigate("ShopDetail", { shopId: row.shop._id });
-                        }
-                    }}
-                    style={styles.recentCard}
-                  >
-                    <View style={styles.recentIconBox}>
-                       <Sparkles color={palette.accent} size={16} />
-                    </View>
-                    <Text numberOfLines={1} style={styles.recentName}>{getRowName(row)}</Text>
-                    <Text style={styles.recentMeta}>{getRowNeighborhood(row) || "Unknown"}</Text>
-                  </Pressable>
+                {visibleRecentRows.map((row, idx) => (
+                  <RecentActivityCard
+                    index={idx}
+                    key={row.kind === "pending" ? row.capture.localId : row.shop._id}
+                    onPress={openRecentActivity}
+                    row={row}
+                  />
                 ))}
-                {missionRows.length === 0 && (
+                {visibleRecentRows.length === 0 && (
                   <View style={styles.emptyRecent}>
                     <Text style={styles.emptyRecentText}>No recent activity</Text>
                   </View>
                 )}
               </ScrollView>
-            </View>
+            </RevealBlock>
 
-            {/* Layer 3: Folder Grid */}
-            <View style={styles.section}>
-              <Text style={styles.sectionHeaderLabel}>MISSION FOLDERS</Text>
+            <RevealBlock delay={120} style={styles.section}>
+              <Text style={styles.sectionHeaderLabel}>YOUR FOLDERS</Text>
+              <Text style={styles.sectionHelperText}>Tap a folder to see leads.</Text>
               <View style={styles.folderGrid}>
-                {missionCategories.map((category) => {
+                {orderedMissionCategories.map((category, index) => {
                   const Icon = categoryIcons[category.id as keyof typeof categoryIcons] ?? Store;
+
                   return (
-                    <Pressable
+                    <MissionFolderCard
+                      canDelete={category.id !== deletingCategoryId && category.label.toLowerCase() !== "unsorted"}
+                      category={category}
+                      count={categoryCounts.get(category.label) ?? 0}
+                      icon={Icon}
+                      index={index}
+                      isPinned={pinnedCategoryIds.includes(category.id)}
                       key={category.id}
-                      onPress={() => {
-                        void playSelectionHaptic();
-                        setActiveCategoryId(category.id);
-                        navigation.navigate("MissionDetail", {
-                          missionId: activeMissionId,
-                          categoryId: category.id,
-                        });
-                      }}
-                      style={({ pressed }) => [styles.folderCard, pressed && styles.folderCardPressed]}
-                    >
-                      <View style={styles.folderIcon}>
-                        <Icon color={palette.accent} size={22} />
-                      </View>
-                      <View style={styles.folderInfo}>
-                        <Text style={styles.folderName}>{category.label}</Text>
-                        <Text style={styles.folderCount}>{categoryCounts.get(category.label) ?? 0} leads</Text>
-                      </View>
-                    </Pressable>
+                      onCreateLead={createLeadInCategory}
+                      onDelete={deleteCategory}
+                      onPress={openCategory}
+                      onTogglePin={togglePinnedCategory}
+                      width={folderCardWidth}
+                    />
                   );
                 })}
               </View>
-            </View>
+            </RevealBlock>
 
             <Pressable 
               onPress={() => {
@@ -477,11 +1012,11 @@ function ShopsListScreenContent() {
               style={styles.changeMissionButton}
             >
               <ArrowLeft color={palette.mutedInk} size={16} />
-              <Text style={styles.changeMissionText}>Switch Operational Module</Text>
+              <Text style={styles.changeMissionText}>Switch workspace</Text>
             </Pressable>
           </View>
         ) : (
-          <View style={styles.section}>
+          <RevealBlock delay={0} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{activeCategoryLabel}</Text>
               <Text style={styles.sectionMeta}>{rows.length} leads</Text>
@@ -490,12 +1025,12 @@ function ShopsListScreenContent() {
             <View style={styles.commandCard}>
               <View style={styles.commandHeader}>
                 <Target color={palette.accentStrong} size={16} />
-                <Text style={styles.commandTitle}>Command focus</Text>
+                <Text style={styles.commandTitle}>Quick filters</Text>
               </View>
               <Text style={styles.commandText}>
                 {focusFilter === "all"
-                  ? "View everything in this folder, then switch to a focus lane when you need faster decisions."
-                  : `Showing ${rows.length} ${focusFilter === "hot" ? "hot" : focusFilter === "follow_up" ? "follow-up" : "uncertain"} leads for quick action.`}
+                  ? "See all leads, or use quick filters to focus on hot and follow-up items."
+                  : `Showing ${rows.length} ${focusFilter === "hot" ? "hot" : focusFilter === "follow_up" ? "follow-up" : "review"} leads.`}
               </Text>
             </View>
 
@@ -505,7 +1040,7 @@ function ShopsListScreenContent() {
                   <Search color={palette.mutedInk} size={18} />
                   <TextInput
                     onChangeText={setSearchText}
-                    placeholder="Search current folder"
+                    placeholder="Search leads"
                     placeholderTextColor={palette.mutedInk}
                     style={styles.searchInput}
                     value={searchText}
@@ -523,8 +1058,8 @@ function ShopsListScreenContent() {
               </View>
               <View style={styles.toolbar}>
                 <View style={styles.segmentedControl}>
-                  <Segment active={sortMode === "latest"} label="Latest Saved" onPress={() => setSortMode("latest")} />
-                  <Segment active={sortMode === "nearest"} label="Nearest To Me" onPress={() => setSortMode("nearest")} />
+                  <Segment active={sortMode === "latest"} label="Newest" onPress={() => setSortMode("latest")} />
+                  <Segment active={sortMode === "nearest"} label="Closest" onPress={() => setSortMode("nearest")} />
                 </View>
                 <Pressable
                   onPress={() => {
@@ -570,39 +1105,74 @@ function ShopsListScreenContent() {
                 />
               </ScrollView>
             </View>
-            <FlatList
-              contentContainerStyle={styles.listContent}
-              data={rows}
-              keyExtractor={(item) => (item.row.kind === "pending" ? item.row.capture.localId : item.row.shop._id)}
-              refreshControl={<RefreshControl onRefresh={() => void flushQueue()} refreshing={isFlushing} />}
-              renderItem={renderLead}
-              scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={styles.separator} />}
-              ListEmptyComponent={
+            <View style={styles.listContent}>
+              {rows.length === 0 ? (
                 <View style={styles.centerState}>
-                  <Text style={styles.emptyTitle}>No leads yet.</Text>
-                  <Pressable
-                    accessibilityLabel={`Start mission in ${activeCategoryLabel}`}
-                    accessibilityRole="button"
-                    onPress={openCaptureScreen}
-                    style={({ pressed }) => [
-                      styles.startMissionButton,
-                      pressed && styles.startMissionButtonPressed,
-                    ]}
-                  >
-                    <Text style={styles.startMissionButtonText}>Start Mission</Text>
-                  </Pressable>
+                  <Text style={styles.emptyTitle}>{emptyLeadState.title}</Text>
+                  <Text style={styles.centerText}>{emptyLeadState.body}</Text>
+                  {emptyLeadState.canClearFocus ? (
+                    <Pressable
+                      accessibilityLabel="View all leads"
+                      accessibilityRole="button"
+                      onPress={() => {
+                        void playSelectionHaptic();
+                        setFocusFilter("all");
+                      }}
+                      style={({ pressed }) => [
+                        styles.startMissionButton,
+                        pressed && styles.startMissionButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.startMissionButtonText}>View All</Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      accessibilityLabel={`Start mission in ${activeCategoryLabel}`}
+                      accessibilityRole="button"
+                      onPress={openCaptureScreen}
+                      style={({ pressed }) => [
+                        styles.startMissionButton,
+                        pressed && styles.startMissionButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.startMissionButtonText}>Start Mission</Text>
+                    </Pressable>
+                  )}
                 </View>
-              }
-            />
-          </View>
+              ) : (
+                rows.map((item, index) => {
+                  const rowKey =
+                    item.row.kind === "pending" ? item.row.capture.localId : item.row.shop._id;
+
+                  return (
+                    <View key={rowKey}>
+                      {index > 0 ? <View style={styles.separator} /> : null}
+                      {renderLead({ item })}
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </RevealBlock>
         )}
       </ScrollView>
 
+      <LeadEditSheet
+        draft={editDraft}
+        isSaving={isSavingEdit}
+        onChange={setEditDraft}
+        onClose={() => setEditingLead(null)}
+        onSave={saveLeadEdit}
+        visible={editingLead !== null}
+      />
+
       <MoveSheet
         activeMissionId={activeMissionId}
+        deletingCategoryId={deletingCategoryId}
         getMissionCategories={getMissionCategories}
+        missionProfiles={missionProfiles}
         onClose={() => setSelectedLead(null)}
+        onDeleteCategory={(category) => deleteCategory(category, categoryCounts.get(category.label) ?? 0)}
         onMove={handleMoveLead}
         selectedLead={selectedLead}
       />
@@ -615,7 +1185,9 @@ function Segment({ active, label, onPress }: { active: boolean; label: string; o
     <Pressable
       onPress={() => {
         void playSelectionHaptic();
-        onPress();
+        startTransition(() => {
+          onPress();
+        });
       }}
       style={({ pressed }) => [styles.segment, active && styles.segmentActive, pressed && !active && styles.segmentPressed]}
     >
@@ -631,7 +1203,9 @@ function AreaChip({ active, label, onPress }: { active: boolean; label: string; 
     <Pressable
       onPress={() => {
         void playSelectionHaptic();
-        onPress();
+        startTransition(() => {
+          onPress();
+        });
       }}
       style={({ pressed }) => [
         styles.areaChip,
@@ -656,9 +1230,13 @@ function AreaChip({ active, label, onPress }: { active: boolean; label: string; 
 function FocusChip({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
   return (
     <Pressable
+      accessibilityHint={`Show ${label.replace(/\s*\(\d+\)/, "").toLowerCase()} leads`}
+      accessibilityRole="button"
       onPress={() => {
         void playSelectionHaptic();
-        onPress();
+        startTransition(() => {
+          onPress();
+        });
       }}
       style={({ pressed }) => [
         styles.focusChip,
@@ -671,16 +1249,112 @@ function FocusChip({ active, label, onPress }: { active: boolean; label: string;
   );
 }
 
+function LeadEditSheet({
+  draft,
+  isSaving,
+  onChange,
+  onClose,
+  onSave,
+  visible,
+}: {
+  draft: LeadEditDraft;
+  isSaving: boolean;
+  onChange: (draft: LeadEditDraft) => void;
+  onClose: () => void;
+  onSave: () => void;
+  visible: boolean;
+}) {
+  function patchDraft(patch: Partial<LeadEditDraft>) {
+    onChange({ ...draft, ...patch });
+  }
+
+  return (
+    <AppBottomSheet
+      description="Edit the lead details shown on the card."
+      onClose={onClose}
+      title="Edit Lead"
+      visible={visible}
+    >
+      <View style={styles.editSheetStack}>
+        <TextInput
+          onChangeText={(name) => patchDraft({ name })}
+          placeholder="Lead or shop name"
+          placeholderTextColor={palette.mutedInk}
+          style={styles.editInput}
+          value={draft.name}
+        />
+        <TextInput
+          onChangeText={(contactPerson) => patchDraft({ contactPerson })}
+          placeholder="Decision maker"
+          placeholderTextColor={palette.mutedInk}
+          style={styles.editInput}
+          value={draft.contactPerson}
+        />
+        <TextInput
+          keyboardType="phone-pad"
+          onChangeText={(phone) => patchDraft({ phone })}
+          placeholder="Phone"
+          placeholderTextColor={palette.mutedInk}
+          style={styles.editInput}
+          value={draft.phone}
+        />
+        <TextInput
+          onChangeText={(role) => patchDraft({ role })}
+          placeholder="Role"
+          placeholderTextColor={palette.mutedInk}
+          style={styles.editInput}
+          value={draft.role}
+        />
+        <TextInput
+          multiline
+          onChangeText={(nextStep) => patchDraft({ nextStep })}
+          placeholder="Next step"
+          placeholderTextColor={palette.mutedInk}
+          style={[styles.editInput, styles.editInputMultiline]}
+          value={draft.nextStep}
+        />
+        <View style={styles.editActionRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onClose}
+            style={({ pressed }) => [styles.editSecondaryButton, pressed && styles.sheetDeleteButtonPressed]}
+          >
+            <Text style={styles.editSecondaryText}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isSaving}
+            onPress={onSave}
+            style={({ pressed }) => [
+              styles.editPrimaryButton,
+              isSaving && styles.actionDisabled,
+              pressed && !isSaving && styles.startMissionButtonPressed,
+            ]}
+          >
+            <Text style={styles.editPrimaryText}>{isSaving ? "Saving..." : "Save"}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </AppBottomSheet>
+  );
+}
+
 function MoveSheet({
   activeMissionId,
+  deletingCategoryId,
   getMissionCategories,
+  missionProfiles,
   onClose,
+  onDeleteCategory,
   onMove,
   selectedLead,
 }: {
   activeMissionId: string;
+  deletingCategoryId: string | null;
   getMissionCategories: (missionId?: string | null) => { id: string; label: string }[];
+  missionProfiles: MissionDefinition[];
   onClose: () => void;
+  onDeleteCategory: (category: MissionCategory) => void;
   onMove: (missionLabel: string, categoryLabel: string) => Promise<void>;
   selectedLead: LeadTarget | null;
 }) {
@@ -708,11 +1382,33 @@ function MoveSheet({
           }}
           style={styles.sheetButton}
         >
-          <Text style={styles.sheetButtonText}>{category.label}</Text>
+          <Text ellipsizeMode="tail" numberOfLines={1} style={styles.sheetButtonText}>
+            {category.label}
+          </Text>
+          {category.label.toLowerCase() !== "unsorted" ? (
+            <Pressable
+              accessibilityLabel={`Delete ${category.label} folder`}
+              accessibilityRole="button"
+              disabled={deletingCategoryId !== null}
+              hitSlop={10}
+              onPress={(event) => {
+                event.stopPropagation();
+                void playSelectionHaptic();
+                onDeleteCategory(category);
+              }}
+              style={({ pressed }) => [
+                styles.sheetDeleteButton,
+                deletingCategoryId === category.id && styles.actionDisabled,
+                pressed && deletingCategoryId === null && styles.sheetDeleteButtonPressed,
+              ]}
+            >
+              <Trash2 color={palette.danger} size={17} />
+            </Pressable>
+          ) : null}
         </Pressable>
       ))}
       <Text style={styles.sheetSectionTitle}>Change Mission</Text>
-      {missionCatalog.map((missionOption) => (
+      {missionProfiles.map((missionOption) => (
         <Pressable
           key={missionOption.id}
           onPress={() => {
@@ -754,6 +1450,14 @@ function getRowContact(row: LeadTarget) {
   return row.kind === "pending" ? row.capture.contactPerson : row.shop.contactPerson;
 }
 
+function getRowRole(row: LeadTarget) {
+  return row.kind === "pending" ? row.capture.role ?? "" : row.shop.role ?? "";
+}
+
+function getRowNextStep(row: LeadTarget) {
+  return row.kind === "pending" ? row.capture.nextStep ?? "" : row.shop.nextStep ?? "";
+}
+
 function getRowLocation(row: LeadTarget) {
   return row.kind === "pending" ? row.capture.location : row.shop.location;
 }
@@ -782,17 +1486,24 @@ const styles = StyleSheet.create({
   dashboard: { gap: spacing.lg },
   statsRibbon: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.lg },
   ribbonCard: { flex: 1, backgroundColor: palette.surface, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, padding: spacing.md, alignItems: "center", gap: 4 },
+  ribbonCardDark: { backgroundColor: "#161719" },
   ribbonValue: { fontSize: 22, fontWeight: "800", color: palette.ink },
+  ribbonValueDark: { color: palette.white },
   ribbonLabel: { fontSize: 10, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
+  ribbonLabelDark: { color: "#B4AC9F" },
   sectionHeaderLabel: { fontSize: 11, fontWeight: "800", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: spacing.xs },
+  sectionHelperText: { marginTop: -spacing.xs, fontSize: typography.label, color: palette.mutedInk },
   recentCarousel: { gap: spacing.sm, paddingRight: spacing.lg },
+  recentCardWrap: { width: 140 },
   recentCard: { width: 140, backgroundColor: palette.surface, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, padding: spacing.sm, gap: 4 },
+  recentCardPressed: { backgroundColor: palette.backgroundMuted },
   recentIconBox: { width: 28, height: 28, borderRadius: radii.sm, backgroundColor: palette.accentSoft, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   recentName: { fontSize: 14, fontWeight: "700", color: palette.ink },
   recentMeta: { fontSize: 11, color: palette.mutedInk, fontWeight: "600" },
   emptyRecent: { height: 80, justifyContent: "center", paddingHorizontal: spacing.md },
   emptyRecentText: { fontSize: 12, color: palette.mutedInk, fontStyle: "italic" },
-  folderInfo: { flex: 1, gap: 2 },
+  folderInfo: { width: "100%", minWidth: 0, alignItems: "center", gap: 2 },
+  folderCardWrap: {},
   changeMissionButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: palette.line, marginTop: spacing.md },
   changeMissionText: { fontSize: 13, fontWeight: "700", color: palette.mutedInk },
   syncBar: { marginHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, borderRadius: radii.pill, backgroundColor: palette.backgroundMuted, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
@@ -829,12 +1540,20 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
   sectionTitle: { fontSize: typography.title, fontWeight: "800", color: palette.ink },
   sectionMeta: { fontSize: typography.overline, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
-  folderGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  folderCard: { width: "48%", borderRadius: radii.lg, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, padding: spacing.lg, gap: spacing.sm },
+  folderGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: spacing.sm },
+  folderCard: { width: "100%", minHeight: 126, alignItems: "center", justifyContent: "center", borderRadius: radii.lg, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: spacing.sm },
   folderCardPressed: { backgroundColor: palette.backgroundMuted },
-  folderIcon: { width: 44, height: 44, borderRadius: radii.md, alignItems: "center", justifyContent: "center", backgroundColor: palette.accentSoft },
-  folderName: { fontSize: typography.title, fontWeight: "800", color: palette.ink },
+  folderIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: palette.accentSoft },
+  folderName: { width: "100%", fontSize: 16, lineHeight: 20, fontWeight: "800", color: palette.ink, textAlign: "center" },
   folderCount: { fontSize: typography.label, color: palette.mutedInk },
+  folderCountEmpty: { color: palette.mutedInk },
+  folderCreateButton: { minHeight: 34, justifyContent: "center", borderRadius: radii.pill, backgroundColor: palette.accentSoft, paddingHorizontal: spacing.sm },
+  folderCreateButtonPressed: { opacity: 0.78 },
+  folderCreateText: { fontSize: 12, fontWeight: "800", color: palette.accentStrong },
+  folderPinButton: { position: "absolute", top: spacing.sm, left: spacing.sm, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255, 252, 248, 0.72)" },
+  folderPinButtonActive: { backgroundColor: palette.accentSoft },
+  folderDeleteButton: { position: "absolute", top: spacing.sm, right: spacing.sm, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: palette.dangerSoft },
+  folderIconButtonPressed: { opacity: 0.72 },
   searchRow: { flexDirection: "row", gap: spacing.sm },
   searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, minHeight: 48, paddingHorizontal: spacing.md },
   searchInput: { flex: 1, fontSize: typography.body, color: palette.ink },
@@ -900,9 +1619,62 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: palette.white,
   },
+  editSheetStack: { gap: spacing.sm },
+  editInput: {
+    minHeight: 52,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.card,
+    color: palette.ink,
+    fontSize: typography.body,
+    fontWeight: "700",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  editInputMultiline: {
+    minHeight: 86,
+    textAlignVertical: "top",
+  },
+  editActionRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  editSecondaryButton: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.line,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.card,
+  },
+  editSecondaryText: {
+    fontSize: typography.label,
+    fontWeight: "800",
+    color: palette.ink,
+  },
+  editPrimaryButton: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.accent,
+  },
+  editPrimaryText: {
+    fontSize: typography.label,
+    fontWeight: "900",
+    color: palette.white,
+  },
   sheetSectionTitle: { marginTop: spacing.sm, fontSize: typography.overline, fontWeight: "700", color: palette.mutedInk, textTransform: "uppercase", letterSpacing: 1 },
-  sheetButton: { borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.card, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
-  sheetButtonText: { fontSize: typography.body, fontWeight: "700", color: palette.ink },
+  sheetButton: { minHeight: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, borderRadius: radii.md, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.card, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  sheetButtonText: { flex: 1, minWidth: 0, fontSize: typography.body, fontWeight: "700", color: palette.ink },
+  sheetDeleteButton: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: palette.dangerSoft },
+  sheetDeleteButtonPressed: { opacity: 0.72 },
+  actionDisabled: { opacity: 0.5 },
   sheetClose: { marginTop: spacing.md, alignItems: "center", paddingVertical: spacing.sm },
   sheetCloseText: { fontSize: typography.label, fontWeight: "700", color: palette.accentStrong },
 });

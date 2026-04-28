@@ -4,6 +4,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { useConvex } from "convex/react";
 import {
   ReactNode,
+  RefObject,
   startTransition,
   useDeferredValue,
   useEffect,
@@ -14,7 +15,8 @@ import {
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
+  findNodeHandle,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -36,9 +38,10 @@ import {
 } from "lucide-react-native";
 import { api } from "../../convex/_generated/api";
 import { AppBottomSheet } from "../components/AppBottomSheet";
+import { ConfirmationSheet } from "../components/ConfirmationSheet";
 import { CaptureMapPicker } from "../components/CaptureMapPicker";
 import { getVisitOutcomeLabel, visitOutcomeOptions } from "../constants/visit-outcomes";
-import { getMissionDefinition, missionCatalog } from "../constants/missions";
+import { getMissionDefinition, MissionDefinition } from "../constants/missions";
 import { palette, radii, shadows, spacing, typography } from "../constants/theme";
 import { useCaptureQueue } from "../contexts/CaptureQueueContext";
 import { useMissionControl } from "../contexts/MissionControlContext";
@@ -52,6 +55,8 @@ type FlashState = { tone: "success" | "warning" | "error"; message: string };
 type Coordinates = { lat: number; lng: number };
 
 const DEFAULT_MAP_COORDINATES: Coordinates = { lat: 24.4539, lng: 54.3773 };
+const KEYBOARD_SCROLL_DELAY_MS = Platform.OS === "android" ? 180 : 80;
+const KEYBOARD_SCROLL_EXTRA_OFFSET = Platform.OS === "android" ? 220 : 128;
 
 const COLORS = {
   bg: "#F8FAFC",
@@ -111,14 +116,17 @@ export function CaptureScreen() {
     addMissionCategory,
     activeMissionId,
     activeMissionLabel,
+    deleteMissionCategory,
     getCategoryById,
     getCategoryIdFromLabel,
     getMissionCategories,
+    getMissionProfiles,
     startCategoryMission,
   } = useMissionControl();
   const { pendingCaptures, pendingCount, saveCapture } = useCaptureQueue();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<ShopDraft>(() => createEmptyDraft(activeMissionLabel, activeCategoryLabel));
+  const missionProfiles = getMissionProfiles();
   const [flashState, setFlashState] = useState<FlashState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
@@ -127,7 +135,11 @@ export function CaptureScreen() {
   const [isResolvingLocation, setIsResolvingLocation] = useState(false);
   const [isPreparingMap, setIsPreparingMap] = useState(false);
   const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
+  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+  const [isDuplicateSheetOpen, setIsDuplicateSheetOpen] = useState(false);
+  const [isDeleteFolderSheetOpen, setIsDeleteFolderSheetOpen] = useState(false);
+  const [folderToDelete, setFolderToDelete] = useState<{ missionId: string; category: { id: string; label: string } } | null>(null);
   const [mapCoordinates, setMapCoordinates] = useState<Coordinates | null>(null);
   const [pickerMissionId, setPickerMissionId] = useState(activeMissionId);
   const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -135,11 +147,14 @@ export function CaptureScreen() {
     Awaited<ReturnType<typeof convex.query<typeof api.shops.findPotentialDuplicates>>> | undefined
   >(undefined);
   const [remoteDuplicateCheckEnabled, setRemoteDuplicateCheckEnabled] = useState(true);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const contactRef = useRef<TextInput>(null);
+  const neighborhoodRef = useRef<TextInput>(null);
   const roleRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
   const nextStepRef = useRef<TextInput>(null);
   const nameRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const duplicateNeighborhood = draft.neighborhood || getLocationAreaLabel(draft.location)?.split(",")[0]?.trim() || "";
   const deferredDuplicateName = useDeferredValue(draft.name);
   const deferredDuplicatePhone = useDeferredValue(draft.phone);
@@ -207,6 +222,7 @@ export function CaptureScreen() {
   const missingLocation = !draft.location;
   const missingOutcome = !draft.outcome;
   const isReadyToSave = !missingName && !missingLocation && !missingOutcome;
+  const shouldHideTransientOverlays = false;
   const completedRequiredCount = Number(!missingName) + Number(!missingLocation) + Number(!missingOutcome);
   const remainingRequiredCount = 3 - completedRequiredCount;
   const nextRequiredAction = missingName
@@ -224,6 +240,25 @@ export function CaptureScreen() {
     const timeout = setTimeout(() => setFlashState(null), 1800);
     return () => clearTimeout(timeout);
   }, [flashState]);
+
+  useEffect(() => {
+    const showListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const hideListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -292,8 +327,44 @@ export function CaptureScreen() {
     setFlashState({ tone, message });
   }
 
+  function scrollInputIntoView(inputRef: RefObject<TextInput | null>) {
+    const input = inputRef.current;
+
+    if (!input) {
+      return;
+    }
+
+    setTimeout(() => {
+      const nodeHandle = findNodeHandle(input);
+      const scrollResponder = (scrollRef.current as unknown as {
+        getScrollResponder?: () => {
+          scrollResponderScrollNativeHandleToKeyboard?: (
+            nodeHandle: number,
+            extraHeight: number,
+            preventNegativeScrollOffset?: boolean,
+          ) => void;
+        };
+      } | null)?.getScrollResponder?.();
+
+      if (!nodeHandle || !scrollResponder?.scrollResponderScrollNativeHandleToKeyboard) {
+        return;
+      }
+
+      scrollResponder.scrollResponderScrollNativeHandleToKeyboard(
+        nodeHandle,
+        KEYBOARD_SCROLL_EXTRA_OFFSET,
+        true,
+      );
+    }, KEYBOARD_SCROLL_DELAY_MS);
+  }
+
+  function focusTextField(field: string, inputRef: RefObject<TextInput | null>) {
+    setFocusedField(field);
+    scrollInputIntoView(inputRef);
+  }
+
   function openFolderPicker() {
-    const missionId = missionCatalog.find((mission) => mission.label === draft.mission)?.id ?? activeMissionId;
+    const missionId = missionProfiles.find((mission) => mission.label === draft.mission)?.id ?? activeMissionId;
     setPickerMissionId(missionId);
     setIsFolderPickerOpen(true);
   }
@@ -316,6 +387,17 @@ export function CaptureScreen() {
     setDraft((current) => ({ ...current, mission: mission.label, category: category?.label ?? "Unsorted" }));
     startCategoryMission({ missionId, categoryId });
     setIsFolderPickerOpen(false);
+  }
+
+  function deleteFolderFromPicker(missionId: string, category: { id: string; label: string }) {
+    const normalizedLabel = category.label.trim().toLowerCase();
+
+    if (normalizedLabel === "unsorted" || deletingFolderId) {
+      return;
+    }
+
+    setFolderToDelete({ missionId, category });
+    setIsDeleteFolderSheetOpen(true);
   }
 
   async function getCurrentCoordinates() {
@@ -450,24 +532,7 @@ export function CaptureScreen() {
 
   async function handleSave() {
     if (duplicateCandidates.length > 0) {
-      const duplicateSummary = duplicateCandidates
-        .map((candidate) => `${candidate.name} • ${candidate.neighborhood || "Unknown area"} • ${candidate.source === "live" ? "Live" : "Queued"}`)
-        .join("\n");
-
-      Alert.alert(
-        "Possible duplicate",
-        `${duplicateSummary}\n\nSave anyway?`,
-        [
-          { text: "Review", style: "cancel" },
-          {
-            text: "Save Anyway",
-            style: "destructive",
-            onPress: () => {
-              void persistDraft();
-            },
-          },
-        ],
-      );
+      setIsDuplicateSheetOpen(true);
       return;
     }
 
@@ -484,13 +549,20 @@ export function CaptureScreen() {
     : null;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.screen}>
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 168 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 168 }]}
+          keyboardShouldPersistTaps="handled"
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.completionCard}>
             <View style={styles.completionHeader}>
-              <Text style={styles.completionTitle}>Capture progress</Text>
-              <Text style={styles.completionMeta}>{pendingCount > 0 ? `${pendingCount} queued` : "Queue clear"}</Text>
+              <Text style={styles.completionTitle}>Complete the basics</Text>
+              <Text accessibilityLabel={`${pendingCount} queued capture${pendingCount === 1 ? "" : "s"}`} style={styles.completionMeta}>
+                {pendingCount}
+              </Text>
             </View>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${captureProgressPercent}%` }]} />
@@ -510,7 +582,6 @@ export function CaptureScreen() {
           <View style={styles.priorityCard}>
             <View style={styles.priorityHeader}>
               <View style={styles.priorityCopy}>
-                <Text style={styles.eyebrow}>Quick Visit</Text>
                 <Text style={styles.priorityTitle}>Shop & Contact</Text>
               </View>
               <Pressable onPress={() => { void playSelectionHaptic(); openFolderPicker(); }} style={({ pressed }) => [styles.destinationCard, pressed && styles.pressedDestinationCard]}>
@@ -550,7 +621,7 @@ export function CaptureScreen() {
             </View>
 
             <View style={[styles.locationPanel, showValidation && missingLocation && styles.validationPanel]}>
-              <Text style={styles.fieldLabel}>Area or auto-location</Text>
+              <Text style={styles.fieldLabel}>Location</Text>
               {draft.location ? (
                 <View style={styles.locationFoundBlock}>
                   <View style={styles.flex}>
@@ -584,9 +655,10 @@ export function CaptureScreen() {
                   autoCapitalize="words"
                   onChangeText={(value) => updateField("neighborhood", value)}
                   onBlur={() => setFocusedField(null)}
-                  onFocus={() => setFocusedField("neighborhood")}
+                  onFocus={() => focusTextField("neighborhood", neighborhoodRef)}
                   placeholder="Area / landmark"
                   placeholderTextColor={COLORS.textMuted}
+                  ref={neighborhoodRef}
                   style={[styles.inputDense, focusedField === "neighborhood" && styles.inputFocused]}
                   value={draft.neighborhood}
                 />
@@ -594,14 +666,14 @@ export function CaptureScreen() {
             </View>
 
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Decision maker</Text>
+              <Text style={styles.fieldLabel}>Contact name</Text>
               <TextInput
                 autoCapitalize="words"
                 onChangeText={(value) => updateField("contactPerson", value)}
                 onBlur={() => setFocusedField(null)}
-                onFocus={() => setFocusedField("contactPerson")}
+                onFocus={() => focusTextField("contactPerson", contactRef)}
                 onSubmitEditing={() => roleRef.current?.focus()}
-                placeholder="Decision maker name"
+                placeholder="Who to speak with"
                 placeholderTextColor={COLORS.textMuted}
                 ref={contactRef}
                 returnKeyType="next"
@@ -611,14 +683,14 @@ export function CaptureScreen() {
             </View>
 
             <View style={styles.fieldBlock}>
-              <Text style={styles.fieldLabel}>Role</Text>
+              <Text style={styles.fieldLabel}>Their role</Text>
               <TextInput
                 autoCapitalize="words"
                 onChangeText={(value) => updateField("role", value)}
                 onBlur={() => setFocusedField(null)}
-                onFocus={() => setFocusedField("role")}
+                onFocus={() => focusTextField("role", roleRef)}
                 onSubmitEditing={() => phoneRef.current?.focus()}
-                placeholder="Owner / manager / cashier"
+                placeholder="Owner, manager, cashier…"
                 placeholderTextColor={COLORS.textMuted}
                 ref={roleRef}
                 returnKeyType="next"
@@ -642,7 +714,7 @@ export function CaptureScreen() {
                       pressed && phoneState !== "got" && styles.pressedOpacity,
                     ]}
                   >
-                    <Text style={[styles.toggleChipText, phoneState === "got" && styles.toggleChipTextActive]}>Got number</Text>
+                    <Text style={[styles.toggleChipText, phoneState === "got" && styles.toggleChipTextActive]}>Have number</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => {
@@ -655,7 +727,7 @@ export function CaptureScreen() {
                       pressed && phoneState !== "none" && styles.pressedOpacity,
                     ]}
                   >
-                    <Text style={[styles.toggleChipText, phoneState === "none" && styles.toggleChipTextMutedActive]}>No number</Text>
+                    <Text style={[styles.toggleChipText, phoneState === "none" && styles.toggleChipTextMutedActive]}>Skip</Text>
                   </Pressable>
                 </View>
               </View>
@@ -665,7 +737,7 @@ export function CaptureScreen() {
                 onBlur={() => setFocusedField(null)}
                 onFocus={() => {
                   setPhoneState("got");
-                  setFocusedField("phone");
+                  focusTextField("phone", phoneRef);
                 }}
                 onSubmitEditing={() => nextStepRef.current?.focus()}
                 editable={phoneState !== "none"}
@@ -735,8 +807,8 @@ export function CaptureScreen() {
               style={({ pressed }) => [styles.moreDetailsToggle, pressed && styles.pressedOpacity]}
             >
               <View>
-                <Text style={styles.moreDetailsTitle}>{displayAdvancedDetails ? "Hide extra details" : "Add more details"}</Text>
-                <Text style={styles.moreDetailsMeta}>Next step and photo are optional.</Text>
+                <Text style={styles.moreDetailsTitle}>{displayAdvancedDetails ? "Hide additional info" : "+ Show more options"}</Text>
+                <Text style={styles.moreDetailsMeta}>Photo and notes optional</Text>
               </View>
               <ChevronDown color={COLORS.textMuted} size={16} style={displayAdvancedDetails ? styles.chevronOpen : undefined} />
             </Pressable>
@@ -744,12 +816,12 @@ export function CaptureScreen() {
             {displayAdvancedDetails ? (
               <View style={styles.extraDetailsCard}>
                 <View style={styles.fieldBlock}>
-                  <Text style={styles.fieldLabel}>Next step</Text>
+                  <Text style={styles.fieldLabel}>Next step <Text style={styles.fieldOptionalLabel}>(optional)</Text></Text>
                   <TextInput
                     autoCapitalize="sentences"
                     onChangeText={(value) => updateField("nextStep", value)}
                     onBlur={() => setFocusedField(null)}
-                    onFocus={() => setFocusedField("nextStep")}
+                    onFocus={() => focusTextField("nextStep", nextStepRef)}
                     placeholder="What happens next?"
                     placeholderTextColor={COLORS.textMuted}
                     ref={nextStepRef}
@@ -761,8 +833,7 @@ export function CaptureScreen() {
 
                 <View style={styles.card}>
                   <View style={styles.cardTopRow}>
-                    <Text style={styles.eyebrow}>Photo</Text>
-                    <Text style={styles.cardMeta}>Optional</Text>
+                    <Text style={styles.fieldLabel}>Photo <Text style={styles.fieldOptionalLabel}>(optional)</Text></Text>
                   </View>
                   {draft.images.length > 0 ? (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbnailRow}>
@@ -794,15 +865,23 @@ export function CaptureScreen() {
           </View>
         </ScrollView>
 
-        <View style={[styles.saveBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <Text style={styles.saveBarHint}>
-            {isReadyToSave ? "Everything required is complete." : `Finish ${remainingRequiredCount} required ${remainingRequiredCount === 1 ? "item" : "items"}.`}
-          </Text>
-          <Pressable 
-            disabled={isSaving} 
-            onPress={() => { void playSelectionHaptic(); void handleSave(); }} 
+        <View
+          style={[
+            styles.saveBar,
+            shouldHideTransientOverlays && styles.saveBarCompact,
+            { paddingBottom: Math.max(insets.bottom, 12), bottom: keyboardHeight },
+          ]}
+        >
+          {!shouldHideTransientOverlays ? (
+            <Text style={styles.saveBarHint}>
+              {isReadyToSave ? "Ready to save this lead." : `Complete ${remainingRequiredCount} more ${remainingRequiredCount === 1 ? "field" : "fields"} to save.`}
+            </Text>
+          ) : null}
+          <Pressable
+            disabled={isSaving}
+            onPress={() => { void playSelectionHaptic(); void handleSave(); }}
             style={({ pressed }) => [
-              styles.saveButton, 
+              styles.saveButton,
               pressed && !isSaving && styles.saveButtonPressed,
               isSaving && styles.actionDisabled,
             ]}
@@ -811,13 +890,13 @@ export function CaptureScreen() {
               <ActivityIndicator color={palette.white} />
             ) : (
               <Text style={styles.saveButtonText}>
-                {isReadyToSave ? "Save Visit" : `Finish ${remainingRequiredCount} required ${remainingRequiredCount === 1 ? "item" : "items"}`}
+                {isReadyToSave ? "Save lead" : `Complete ${remainingRequiredCount} more ${remainingRequiredCount === 1 ? "field" : "fields"}`}
               </Text>
             )}
           </Pressable>
         </View>
 
-        {flashState && (
+        {flashState && !shouldHideTransientOverlays ? (
           <View style={[styles.toastShell, { bottom: insets.bottom + 112 }]}>
             <View style={[styles.toastCard, flashToneMeta?.toneStyle]}>
               <View style={[styles.toastIndicator, flashToneMeta?.indicatorStyle]} />
@@ -827,13 +906,16 @@ export function CaptureScreen() {
               </View>
             </View>
           </View>
-        )}
+        ) : null}
 
         <FolderPickerSheet
           activeMissionId={pickerMissionId}
+          deletingCategoryId={deletingFolderId}
           getCategoriesForMission={getMissionCategories}
+          missionProfiles={missionProfiles}
           onClose={() => setIsFolderPickerOpen(false)}
           onCreateCategory={({ label, missionId }) => addMissionCategory({ label, missionId })}
+          onDeleteCategory={deleteFolderFromPicker}
           onMissionChange={setPickerMissionId}
           onSelect={applyFolderSelection}
           selectedCategoryId={selectedCategoryId}
@@ -849,8 +931,57 @@ export function CaptureScreen() {
           }}
           visible={isMapPickerOpen}
         />
+        <ConfirmationSheet
+          visible={isDuplicateSheetOpen}
+          onClose={() => setIsDuplicateSheetOpen(false)}
+          title="Possible duplicate"
+          description={`Review this before creating another shop record:\n\n${duplicateCandidates.map((c) => `${c.name} • ${c.neighborhood || "Unknown"} • ${c.source === "live" ? "Live" : "Queued"}`).join("\n")}\n\nSave anyway?`}
+          confirmLabel="Save Anyway"
+          onConfirm={() => { void persistDraft(); }}
+          isDestructive={true}
+        />
+
+        {folderToDelete && (
+          <ConfirmationSheet
+            visible={isDeleteFolderSheetOpen}
+            onClose={() => setIsDeleteFolderSheetOpen(false)}
+            title="Delete folder?"
+            description={`${folderToDelete.category.label} will be removed. Leads already saved in this folder will move to Unsorted.`}
+            confirmLabel="Delete"
+            onConfirm={() => {
+              const mission = getMissionDefinition(folderToDelete.missionId);
+              setDeletingFolderId(folderToDelete.category.id);
+              void deleteMissionCategory({
+                categoryId: folderToDelete.category.id,
+                label: folderToDelete.category.label,
+                missionId: folderToDelete.missionId,
+              })
+                .then(() => {
+                  const selectedMissionId = missionProfiles.find((option) => option.label === draft.mission)?.id ?? activeMissionId;
+                  const selectedCategoryId =
+                    getCategoryIdFromLabel(selectedMissionId, draft.category) ??
+                    (selectedMissionId === activeMissionId ? activeCategoryId : null);
+
+                  if (selectedMissionId === mission.id && selectedCategoryId === folderToDelete.category.id) {
+                    setDraft((current) => ({ ...current, mission: mission.label, category: "Unsorted" }));
+                    startCategoryMission({ missionId: mission.id, categoryId: "unsorted" });
+                  }
+                })
+                .catch((error) => {
+                  Alert.alert(
+                    "Folder was not deleted",
+                    error instanceof Error ? error.message : "Try again after the connection is ready.",
+                  );
+                })
+                .finally(() => {
+                  setDeletingFolderId(null);
+                });
+            }}
+            isDestructive={true}
+          />
+        )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -904,18 +1035,24 @@ function SecondaryAction({ disabled, icon, label, onPress }: { disabled?: boolea
 
 function FolderPickerSheet({
   activeMissionId,
+  deletingCategoryId,
   getCategoriesForMission,
+  missionProfiles,
   onClose,
   onCreateCategory,
+  onDeleteCategory,
   onMissionChange,
   onSelect,
   selectedCategoryId,
   visible,
 }: {
   activeMissionId: string;
+  deletingCategoryId: string | null;
   getCategoriesForMission: (missionId: string) => { id: string; label: string }[];
+  missionProfiles: MissionDefinition[];
   onClose: () => void;
   onCreateCategory: (options: { label: string; missionId?: string }) => { id: string; label: string } | null;
+  onDeleteCategory: (missionId: string, category: { id: string; label: string }) => void;
   onMissionChange: (missionId: string) => void;
   onSelect: (missionId: string, categoryId: string) => void;
   selectedCategoryId: string | null;
@@ -934,7 +1071,7 @@ function FolderPickerSheet({
       <View style={styles.sheetMissionSection}>
         <Text style={styles.sheetSectionLabel}>Module</Text>
         <View style={styles.sheetChipRow}>
-          {missionCatalog.map((option) => (
+          {missionProfiles.map((option) => (
             <Pressable
               key={option.id}
               onPress={() => {
@@ -998,6 +1135,7 @@ function FolderPickerSheet({
         <View style={styles.sheetList}>
           {missionCategories.map((category) => (
             <Pressable
+              accessibilityLabel={`${category.label} folder`}
               key={category.id}
               onPress={() => {
                 void playSelectionHaptic();
@@ -1010,14 +1148,40 @@ function FolderPickerSheet({
               ]}
             >
               <View style={styles.sheetItemCopy}>
-                <Text style={[styles.sheetItemText, category.id === selectedCategoryId && styles.sheetItemTextActive]}>
+                <Text
+                  ellipsizeMode="tail"
+                  numberOfLines={1}
+                  style={[styles.sheetItemText, category.id === selectedCategoryId && styles.sheetItemTextActive]}
+                >
                   {category.label}
                 </Text>
                 <Text style={styles.sheetItemMeta}>
                   {category.id === selectedCategoryId ? "Current destination" : "Tap to save into this folder"}
                 </Text>
               </View>
-              {category.id === selectedCategoryId ? <Text style={styles.sheetItemBadge}>Selected</Text> : null}
+              <View style={styles.sheetItemActions}>
+                {category.id === selectedCategoryId ? <Text style={styles.sheetItemBadge}>Selected</Text> : null}
+                {category.label.toLowerCase() !== "unsorted" ? (
+                  <Pressable
+                    accessibilityLabel={`Delete ${category.label} folder`}
+                    accessibilityRole="button"
+                    disabled={deletingCategoryId !== null}
+                    hitSlop={10}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      void playSelectionHaptic();
+                      onDeleteCategory(activeMissionId, category);
+                    }}
+                    style={({ pressed }) => [
+                      styles.sheetDeleteButton,
+                      deletingCategoryId === category.id && styles.actionDisabled,
+                      pressed && deletingCategoryId === null && styles.pressedOpacity,
+                    ]}
+                  >
+                    <Trash2 color={COLORS.danger} size={17} />
+                  </Pressable>
+                ) : null}
+              </View>
             </Pressable>
           ))}
         </View>
@@ -1222,6 +1386,7 @@ const styles = StyleSheet.create({
   fieldBlock: { gap: 6 },
   fieldHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
   fieldLabel: { fontSize: 12, fontWeight: "800", color: COLORS.text, textTransform: "uppercase", letterSpacing: 0.8 },
+  fieldOptionalLabel: { fontSize: 12, fontWeight: "400", color: COLORS.textMuted, textTransform: "none", letterSpacing: 0 },
   inputHero: {
     minHeight: 58,
     borderRadius: radii.md,
@@ -1359,6 +1524,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 6,
+    zIndex: 20,
+  },
+  saveBarCompact: {
+    paddingTop: spacing.sm,
   },
   saveBarHint: {
     fontSize: typography.label,
@@ -1549,6 +1718,7 @@ const styles = StyleSheet.create({
   sheetItemActive: { backgroundColor: "#FFF3EC", borderColor: COLORS.accent },
   sheetItemCopy: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   sheetItemText: { fontSize: typography.body, fontWeight: "600", color: COLORS.text },
@@ -1563,5 +1733,18 @@ const styles = StyleSheet.create({
     color: COLORS.accentStrong,
     textTransform: "uppercase",
     letterSpacing: 1,
+  },
+  sheetItemActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  sheetDeleteButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.dangerSoft,
   },
 });

@@ -1,5 +1,5 @@
 import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import { MessageCircleMore, Navigation, Phone } from "lucide-react-native";
+import { MessageCircleMore, Navigation, Pencil, Phone, Trash2 } from "lucide-react-native";
 import { getVisitOutcomeLabel, VisitOutcomeValue } from "../constants/visit-outcomes";
 import { buildDialLink, buildWhatsAppLink, formatCaptureTime, getInitials } from "../lib/format";
 import { buildCloudinaryImageUrl } from "../lib/cloudinary";
@@ -16,6 +16,8 @@ type ShopCardProps = {
   location: CapturedLocation | null;
   name: string;
   onLongPress?: () => void;
+  onDelete?: () => void;
+  onEdit?: () => void;
   phone: string;
   previewImageUrl: string | null;
   neighborhood?: string | null;
@@ -32,6 +34,8 @@ export function ShopCard({
   location,
   name,
   onLongPress,
+  onDelete,
+  onEdit,
   onPress,
   outcome,
   phone,
@@ -148,6 +152,34 @@ export function ShopCard({
           <Navigation color={location ? palette.ink : palette.mutedInk} size={18} strokeWidth={2} />
         </Pressable>
         <View style={styles.flexSpacer} />
+        {onEdit ? (
+          <Pressable
+            accessibilityLabel={`Edit ${name}`}
+            accessibilityRole="button"
+            onPress={(event) => {
+              event.stopPropagation();
+              void playSelectionHaptic();
+              onEdit();
+            }}
+            style={({ pressed }) => [styles.manageAction, pressed && styles.ghostActionPressed]}
+          >
+            <Pencil color={palette.ink} size={17} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+        {onDelete ? (
+          <Pressable
+            accessibilityLabel={`Delete ${name}`}
+            accessibilityRole="button"
+            onPress={(event) => {
+              event.stopPropagation();
+              void playSelectionHaptic();
+              onDelete();
+            }}
+            style={({ pressed }) => [styles.manageActionDanger, pressed && styles.ghostActionPressed]}
+          >
+            <Trash2 color={palette.danger} size={17} strokeWidth={2} />
+          </Pressable>
+        ) : null}
         <View style={[styles.statusPill, statusTone === "queued" && styles.statusPillQueued]}>
           <Text style={[styles.statusPillText, statusTone === "queued" && styles.statusPillTextQueued]}>
             {statusLabel}
@@ -302,6 +334,22 @@ const styles = StyleSheet.create({
   },
   ghostAction: {
     padding: 2,
+  },
+  manageAction: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.surfaceStrong,
+  },
+  manageActionDanger: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.dangerSoft,
   },
   ghostActionPressed: {
     opacity: 0.5,

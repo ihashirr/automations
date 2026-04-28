@@ -97,11 +97,51 @@ Install dependencies:
 npm install
 ```
 
+Create local environment config:
+
+```bash
+cp .env.example .env.local
+```
+
+Set `EXPO_PUBLIC_CONVEX_URL` to the Convex deployment URL. If you attach photos, also set `EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME` and `EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET`; otherwise photo leads are kept in the local queue until upload config is available.
+
 Run app:
 
 ```bash
 npm run start
 ```
+
+## Launch Instructions
+
+### Android Phone With Expo Go
+
+Use this when a physical Android phone is connected over USB.
+
+1. Confirm the phone is visible:
+
+```bash
+adb devices
+```
+
+2. Start Metro from this project folder and keep it running:
+
+```bash
+npm run start
+```
+
+3. Forward the Metro port to the phone:
+
+```bash
+adb reverse tcp:8081 tcp:8081
+```
+
+4. Open the app in Expo Go:
+
+```bash
+adb shell am start -W -a android.intent.action.VIEW -d "exp://127.0.0.1:8081"
+```
+
+If Metro starts on a different port, replace `8081` in both commands with that port.
 
 ## Android Studio and `android/`
 

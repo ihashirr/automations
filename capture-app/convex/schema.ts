@@ -38,7 +38,32 @@ export default defineSchema({
     .index("by_createdAt", ["createdAt"])
     .index("by_category_and_createdAt", ["category", "createdAt"])
     .index("by_mission_and_createdAt", ["mission", "createdAt"])
+    .index("by_mission_category_createdAt", ["mission", "category", "createdAt"])
     .index("by_neighborhood_and_createdAt", ["neighborhood", "createdAt"])
     .index("by_normalized_phone", ["normalizedPhone"])
     .index("by_normalized_name_and_normalized_neighborhood", ["normalizedName", "normalizedNeighborhood"]),
+  missionFolders: defineTable({
+    folderId: v.string(),
+    isDeleted: v.boolean(),
+    label: v.string(),
+    missionId: v.string(),
+    missionLabel: v.string(),
+    normalizedLabel: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_mission_and_deleted", ["missionId", "isDeleted"])
+    .index("by_mission_and_folder", ["missionId", "folderId"])
+    .index("by_mission_and_normalized_label", ["missionId", "normalizedLabel"]),
+  missionProfiles: defineTable({
+    isDeleted: v.boolean(),
+    label: v.string(),
+    missionId: v.string(),
+    normalizedLabel: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_deleted", ["isDeleted"])
+    .index("by_mission", ["missionId"])
+    .index("by_normalized_label", ["normalizedLabel"]),
 });
