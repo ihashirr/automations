@@ -4,6 +4,8 @@ import Constants from "expo-constants";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { enableFreeze } from "react-native-screens";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { CaptureQueueProvider } from "./src/contexts/CaptureQueueContext";
 import { MissionControlProvider } from "./src/contexts/MissionControlContext";
 import { AppRoot } from "./src/root/AppRoot";
@@ -41,23 +43,31 @@ const convexClient = convexUrl
 export default function App() {
   if (!convexClient) {
     return (
-      <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <ConfigurationScreen />
-      </SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <StatusBar style="dark" />
+          <BottomSheetModalProvider>
+            <ConfigurationScreen />
+          </BottomSheetModalProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="dark" />
-      <ConvexProvider client={convexClient}>
-        <MissionControlProvider>
-          <CaptureQueueProvider>
-            <AppRoot />
-          </CaptureQueueProvider>
-        </MissionControlProvider>
-      </ConvexProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <ConvexProvider client={convexClient}>
+          <MissionControlProvider>
+            <CaptureQueueProvider>
+              <BottomSheetModalProvider>
+                <AppRoot />
+              </BottomSheetModalProvider>
+            </CaptureQueueProvider>
+          </MissionControlProvider>
+        </ConvexProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

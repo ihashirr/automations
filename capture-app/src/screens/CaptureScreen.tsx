@@ -865,36 +865,38 @@ export function CaptureScreen() {
           </View>
         </ScrollView>
 
-        <View
-          style={[
-            styles.saveBar,
-            shouldHideTransientOverlays && styles.saveBarCompact,
-            { paddingBottom: Math.max(insets.bottom, 12), bottom: keyboardHeight },
-          ]}
-        >
-          {!shouldHideTransientOverlays ? (
-            <Text style={styles.saveBarHint}>
-              {isReadyToSave ? "Ready to save this lead." : `Complete ${remainingRequiredCount} more ${remainingRequiredCount === 1 ? "field" : "fields"} to save.`}
-            </Text>
-          ) : null}
-          <Pressable
-            disabled={isSaving}
-            onPress={() => { void playSelectionHaptic(); void handleSave(); }}
-            style={({ pressed }) => [
-              styles.saveButton,
-              pressed && !isSaving && styles.saveButtonPressed,
-              isSaving && styles.actionDisabled,
+        {keyboardHeight === 0 ? (
+          <View
+            style={[
+              styles.saveBar,
+              shouldHideTransientOverlays && styles.saveBarCompact,
+              { paddingBottom: Math.max(insets.bottom, 12) },
             ]}
           >
-            {isSaving ? (
-              <ActivityIndicator color={palette.white} />
-            ) : (
-              <Text style={styles.saveButtonText}>
-                {isReadyToSave ? "Save lead" : `Complete ${remainingRequiredCount} more ${remainingRequiredCount === 1 ? "field" : "fields"}`}
+            {!shouldHideTransientOverlays ? (
+              <Text style={styles.saveBarHint}>
+                {isReadyToSave ? "Ready to save this lead." : `Complete ${remainingRequiredCount} more ${remainingRequiredCount === 1 ? "field" : "fields"} to save.`}
               </Text>
-            )}
-          </Pressable>
-        </View>
+            ) : null}
+            <Pressable
+              disabled={isSaving}
+              onPress={() => { void playSelectionHaptic(); void handleSave(); }}
+              style={({ pressed }) => [
+                styles.saveButton,
+                pressed && !isSaving && styles.saveButtonPressed,
+                isSaving && styles.actionDisabled,
+              ]}
+            >
+              {isSaving ? (
+                <ActivityIndicator color={palette.white} />
+              ) : (
+                <Text style={styles.saveButtonText}>
+                  {isReadyToSave ? "Save lead" : `Complete ${remainingRequiredCount} more ${remainingRequiredCount === 1 ? "field" : "fields"}`}
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
 
         {flashState && !shouldHideTransientOverlays ? (
           <View style={[styles.toastShell, { bottom: insets.bottom + 112 }]}>

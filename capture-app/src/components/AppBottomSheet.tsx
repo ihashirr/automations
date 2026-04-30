@@ -1,7 +1,13 @@
-import React, { ReactNode, useCallback } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { ReactNode, useEffect, useRef, useCallback } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
+import {
+  BottomSheetModal,
+  BottomSheetView,
+  BottomSheetBackdrop,
+  BottomSheetBackdropProps,
+} from "@gorhom/bottom-sheet";
 import { palette, radii, shadows, spacing, typography } from "../constants/theme";
 import { playSelectionHaptic } from "../lib/haptics";
 
@@ -21,57 +27,82 @@ export function AppBottomSheet({
   visible,
 }: AppBottomSheetProps) {
   const insets = useSafeAreaInsets();
+  const ref = useRef<BottomSheetModal>(null);
+
+  useEffect(() => {
+    if (visible) {
+      ref.current?.present();
+    } else {
+      ref.current?.dismiss();
+    }
+  }, [visible]);
+
+  const handleDismiss = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        pressBehavior="close"
+        opacity={0.24}
+      />
+    ),
+    [],
+  );
 
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-          <View style={styles.handle} />
-          <View style={styles.header}>
-            <View style={styles.headerCopy}>
-              <Text style={styles.title}>{title}</Text>
-              {description ? <Text style={styles.description}>{description}</Text> : null}
-            </View>
-            <Pressable
-              onPress={() => {
-                void playSelectionHaptic();
-                onClose();
-              }}
-              style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
-            >
-              <X color={palette.ink} size={18} />
-            </Pressable>
+    <BottomSheetModal
+      ref={ref}
+      onDismiss={handleDismiss}
+      enableDynamicSizing
+      backdropComponent={renderBackdrop}
+      keyboardBehavior={Platform.OS === "ios" ? "extend" : "interactive"}
+      keyboardBlurBehavior="restore"
+      backgroundStyle={styles.background}
+      handleIndicatorStyle={styles.indicator}
+    >
+      <BottomSheetView
+        style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}
+      >
+        <View style={styles.header}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.title}>{title}</Text>
+            {description ? <Text style={styles.description}>{description}</Text> : null}
           </View>
-          {children}
+          <Pressable
+            onPress={() => {
+              void playSelectionHaptic();
+              onClose();
+            }}
+            style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
+          >
+            <X color={palette.ink} size={18} />
+          </Pressable>
         </View>
-      </View>
-    </Modal>
+        {children}
+      </BottomSheetView>
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(17, 24, 39, 0.35)",
+  background: {
+    backgroundColor: palette.card,
+    borderRadius: radii.lg,
+    ...shadows.card,
   },
-  handle: {
-    alignSelf: "center",
-    width: 42,
-    height: 5,
-    borderRadius: 999,
+  indicator: {
     backgroundColor: palette.line,
-    marginBottom: spacing.md,
+    width: 40,
   },
   sheet: {
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    backgroundColor: palette.card,
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    ...shadows.card,
+    paddingTop: spacing.sm,
   },
   header: {
     flexDirection: "row",
