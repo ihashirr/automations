@@ -1,0 +1,42 @@
+{
+  "name": "my-demo",
+  "version": "1.0.0",
+  "description": "My Remotion video",
+  "repository": {},
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@remotion/cli": "4.0.451",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.451",
+    "@remotion/tailwind-v4": "4.0.451",
+    "tailwindcss": "4.0.0"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.451",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.19.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "render": "remotion render Main out/main.mp4 --log=verbose",
+    "render:crisp": "node scripts/render-crisp.js",
+    "render:gpu": "remotion render Main out/main-gpu.mp4 --hardware-acceleration=if-possible --chrome-mode=chrome-for-testing --gl=angle --video-bitrate=8M --log=verbose",
+    "render:gpu:required": "remotion render Main out/main-gpu.mp4 --hardware-acceleration=required --chrome-mode=chrome-for-testing --gl=angle --video-bitrate=8M --log=verbose",
+    "render:frames": "remotion render Main --sequence --output=out/frames --image-format=jpeg --image-sequence-pattern=frame-[frame].[ext] --log=verbose",
+    "encode:nvenc": "ffmpeg -y -framerate 60 -i out/frames/frame-%d.jpeg -c:v h264_nvenc -preset p5 -b:v 8M -pix_fmt yuv420p out/main-gpu-nvenc.mp4",
+    "encode:qsv": "ffmpeg -y -framerate 60 -i out/frames/frame-%d.jpeg -c:v h264_qsv -b:v 8M -pix_fmt yuv420p out/main-gpu-qsv.mp4",
+    "encode:amf": "ffmpeg -y -framerate 60 -i out/frames/frame-%d.jpeg -c:v h264_amf -b:v 8M -pix_fmt yuv420p out/main-gpu-amf.mp4",
+    "render:gpu:nvenc": "npm run render:frames && npm run encode:nvenc",
+    "upgrade": "remotion upgrade",
+    "lint": "eslint src && tsc"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}
